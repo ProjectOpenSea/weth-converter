@@ -40,32 +40,22 @@ import { ItemType, OrderType } from "seaport-sol/SeaportEnums.sol";
 
 import { SeaportInterface } from "seaport-sol/SeaportInterface.sol";
 
-import { setLabel, BaseSeaportTest } from "./helpers/BaseSeaportTest.sol";
+import { setLabel, BaseSeaportTest } from "./BaseSeaportTest.sol";
 
-import { ArithmeticUtil } from "./helpers/ArithmeticUtil.sol";
+import { ArithmeticUtil } from "./ArithmeticUtil.sol";
 
-import { CriteriaResolverHelper } from "./helpers/CriteriaResolverHelper.sol";
+import { ERC1155Recipient } from "../../src/contracts/test/ERC1155Recipient.sol";
 
-import { ERC1155Recipient } from "./helpers/ERC1155Recipient.sol";
+import { ERC721Recipient } from "../../src/contracts/test/ERC721Recipient.sol";
 
-import { ERC721Recipient } from "./helpers/ERC721Recipient.sol";
+import { AmountDeriver } from "seaport-core/lib/AmountDeriver.sol";
 
-import { ExpectedBalances } from "./helpers/ExpectedBalances.sol";
+import { TestERC20 } from "../../src/contracts/test/TestERC20.sol";
 
-import { PreapprovedERC721 } from "./helpers/PreapprovedERC721.sol";
+import { TestERC721 } from "../../src/contracts/test/TestERC721.sol";
 
-import { AmountDeriver } from "seaport-core/src/lib/AmountDeriver.sol";
+import { TestERC1155 } from "../../src/contracts/test/TestERC1155.sol";
 
-import { TestERC20 } from "../../../contracts/test/TestERC20.sol";
-
-import { TestERC721 } from "../../../contracts/test/TestERC721.sol";
-
-import { TestERC1155 } from "../../../contracts/test/TestERC1155.sol";
-
-import {
-    SeaportValidatorHelper,
-    SeaportValidator
-} from "../../../contracts/helpers/order-validator/SeaportValidator.sol";
 
 /**
  * @dev This is a base test class for cases that depend on pre-deployed token
@@ -121,14 +111,11 @@ contract BaseOrderTest is
     Account eve;
     Account frank;
 
-    PreapprovedERC721 internal preapproved721;
-
     TestERC20[] erc20s;
     TestERC721[] erc721s;
     TestERC1155[] erc1155s;
 
     ExpectedBalances public balanceChecker;
-    CriteriaResolverHelper public criteriaResolverHelper;
 
     address[] preapprovals;
 
@@ -171,13 +158,6 @@ contract BaseOrderTest is
         allocateTokensAndApprovals(address(this), type(uint128).max);
 
         _configureStructDefaults();
-
-        validatorHelper = new SeaportValidatorHelper();
-
-        validator = new SeaportValidator(
-            address(validatorHelper),
-            address(getConduitController())
-        );
 
         fulfill = new FulfillAvailableHelper();
         matcher = new MatchFulfillmentHelper();
