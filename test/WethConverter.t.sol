@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.17;
 
-import {AdvancedOrderLib, ConsiderationItemLib, FulfillmentComponentLib, FulfillmentLib, OfferItemLib, OrderComponentsLib, OrderLib, OrderParametersLib, SeaportArrays, ZoneParametersLib} from "seaport-sol/SeaportSol.sol";
+import {AdvancedOrder, AdvancedOrderLib, ConsiderationItem, ConsiderationItemLib, CriteriaResolver, FulfillmentComponent, FulfillmentComponentLib, Fulfillment, FulfillmentLib, ItemType, OfferItem, OfferItemLib, OrderComponents, OrderComponentsLib, Order, OrderLib, OrderParameters, OrderParametersLib, SeaportArrays, ZoneParametersLib} from "seaport-sol/SeaportSol.sol";
 
 import {ContractOffererInterface} from "seaport-types/interfaces/ContractOffererInterface.sol";
 
@@ -40,9 +40,8 @@ contract WethConverterTest is BaseOrderTest {
     using OrderParametersLib for OrderParameters;
     using ZoneParametersLib for AdvancedOrder[];
 
-    struct Context {
+    struct WethContext {
         WethConverter wethConverter;
-        bool isReference;
     }
 
     address immutable WETH_CONTRACT_ADDRESS =
@@ -52,13 +51,18 @@ contract WethConverterTest is BaseOrderTest {
     TestERC721 testERC721;
     TestERC1155 testERC1155;
 
+    string constant WETH_OFFER_721_CONSIDERATION =
+        "WETH_OFFER_721_CONSIDERATION";
+    string constant GET_ETH_FROM_WETH = "GET_ETH_FROM_WETH";
+    string constant GET_WETH_FROM_ETH = "GET_WETH_FROM_ETH";
+
     function setUp() public override {
         super.setUp();
 
         wethConverter = WethConverter(
             deployCode(
                 "out/WethConverter.sol/WethConverter.json",
-                abi.encode(address(consideration), WETH_CONTRACT_ADDRESS)
+                abi.encode(address(seaport), WETH_CONTRACT_ADDRESS)
             )
         );
 
@@ -137,23 +141,10 @@ contract WethConverterTest is BaseOrderTest {
         );
     }
 
-    function test(
-        function(Context memory) external fn,
-        Context memory context
-    ) internal {
-        try fn(context) {
-            fail(
-                "Stateless test function should have reverted with assertion failure status."
-            );
-        } catch (bytes memory reason) {
-            assertPass(reason);
-        }
-    }
-
     function testExecAcceptWethOfferAndGetPaidInEth() public {
         test(
             this.execAcceptWethOfferAndGetPaidInEth,
-            Context({isReference: false})
+            WethContext({wethConverter: wethConverter})
         );
     }
 
@@ -162,6 +153,10 @@ contract WethConverterTest is BaseOrderTest {
     ) external {
         // Mint 721 token to offerer1
         testERC721.mint(offerer1.addr, 1);
+
+        OrderComponents memory orderComponents = OrderComponentsLib
+            .fromDefault(STANDARD)
+            .withOfferer(offerer1.addr);
 
         // offerer2 makes 10 weth offer for offerer1's NFT
         bytes memory signature = signOrder(
@@ -190,9 +185,9 @@ contract WethConverterTest is BaseOrderTest {
             numerator: 0,
             denominator: 0,
             extraData: bytes("")
-        }
+        });
 
-        fulfillments = SeaportArrays.Fulfillments(
+        Fulfillment[] memory fulfillments = SeaportArrays.Fulfillments(
             FulfillmentLib.fromDefault(FF_SF),
             FulfillmentLib.fromDefault(SF_FF)
         );

@@ -45,7 +45,6 @@ contract BaseOrderTest is
     ERC1155Recipient
 {
     using ArithmeticUtil for *;
-    using Strings for uint256;
 
     using AdvancedOrderLib for AdvancedOrder;
     using AdvancedOrderLib for AdvancedOrder[];
@@ -75,8 +74,6 @@ contract BaseOrderTest is
         SeaportInterface seaport;
     }
 
-    SeaportValidatorHelper validatorHelper;
-    SeaportValidator validator;
     FulfillAvailableHelper fulfill;
     MatchFulfillmentHelper matcher;
 
@@ -90,8 +87,6 @@ contract BaseOrderTest is
     TestERC20[] erc20s;
     TestERC721[] erc721s;
     TestERC1155[] erc1155s;
-
-    ExpectedBalances public balanceChecker;
 
     address[] preapprovals;
 
@@ -109,17 +104,7 @@ contract BaseOrderTest is
     function setUp() public virtual override {
         super.setUp();
 
-        balanceChecker = new ExpectedBalances();
-
-        // TODO: push to 24 if performance allows
-        criteriaResolverHelper = new CriteriaResolverHelper(6);
-
-        preapprovals = [
-            address(seaport),
-            address(referenceSeaport),
-            address(conduit),
-            address(referenceConduit)
-        ];
+        preapprovals = [address(seaport), address(conduit)];
 
         _deployTestTokenContracts();
 
@@ -291,7 +276,6 @@ contract BaseOrderTest is
             createErc721Token();
             createErc1155Token();
         }
-        preapproved721 = new PreapprovedERC721(preapprovals);
     }
 
     /**
@@ -354,21 +338,15 @@ contract BaseOrderTest is
         vm.startPrank(_owner);
         for (uint256 i = 0; i < erc20s.length; ++i) {
             erc20s[i].approve(address(seaport), type(uint256).max);
-            erc20s[i].approve(address(referenceSeaport), type(uint256).max);
             erc20s[i].approve(address(conduit), type(uint256).max);
-            erc20s[i].approve(address(referenceConduit), type(uint256).max);
         }
         for (uint256 i = 0; i < erc721s.length; ++i) {
             erc721s[i].setApprovalForAll(address(seaport), true);
-            erc721s[i].setApprovalForAll(address(referenceSeaport), true);
             erc721s[i].setApprovalForAll(address(conduit), true);
-            erc721s[i].setApprovalForAll(address(referenceConduit), true);
         }
         for (uint256 i = 0; i < erc1155s.length; ++i) {
             erc1155s[i].setApprovalForAll(address(seaport), true);
-            erc1155s[i].setApprovalForAll(address(referenceSeaport), true);
             erc1155s[i].setApprovalForAll(address(conduit), true);
-            erc1155s[i].setApprovalForAll(address(referenceConduit), true);
         }
 
         vm.stopPrank();

@@ -54,7 +54,6 @@ contract BaseSeaportTest is DifferentialTest {
 
         conduitKey = bytes32(uint256(uint160(address(this))) << 96);
         _deployAndConfigurePrecompiledOptimizedConsideration();
-        _deployAndConfigurePrecompiledReferenceConsideration();
 
         setLabel(address(conduitController), "conduitController");
         setLabel(address(seaport), "seaport");
@@ -65,15 +64,12 @@ contract BaseSeaportTest is DifferentialTest {
     /**
      * @dev Get the configured preferred Seaport
      */
-    function getSeaport() internal returns (ConsiderationInterface seaport_) {
-        string memory profile = vm.envOr("MOAT_PROFILE", string("optimized"));
-
-        if (stringEq(profile, "reference")) {
-            emit log("Using reference Seaport and ConduitController");
-            seaport_ = referenceSeaport;
-        } else {
-            seaport_ = seaport;
-        }
+    function getSeaport()
+        internal
+        view
+        returns (ConsiderationInterface seaport_)
+    {
+        seaport_ = seaport;
     }
 
     /**
@@ -81,10 +77,9 @@ contract BaseSeaportTest is DifferentialTest {
      */
     function getConduitController()
         internal
+        view
         returns (ConduitControllerInterface conduitController_)
     {
-        string memory profile = vm.envOr("MOAT_PROFILE", string("optimized"));
-
         conduitController_ = conduitController;
     }
 
