@@ -1,26 +1,15 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.17;
 
-import {
-    AdvancedOrderLib,
-    ConsiderationItemLib,
-    FulfillmentComponentLib,
-    FulfillmentLib,
-    OfferItemLib,
-    OrderComponentsLib,
-    OrderLib,
-    OrderParametersLib,
-    SeaportArrays,
-    ZoneParametersLib
-} from "seaport-sol/SeaportSol.sol";
+import {AdvancedOrderLib, ConsiderationItemLib, FulfillmentComponentLib, FulfillmentLib, OfferItemLib, OrderComponentsLib, OrderLib, OrderParametersLib, SeaportArrays, ZoneParametersLib} from "seaport-sol/SeaportSol.sol";
 
 import {ContractOffererInterface} from "seaport-types/interfaces/ContractOffererInterface.sol";
 
 import {WethConverter} from "../src/optimized/WethConverter.sol";
 
-import {TestERC721} from "../src/contracts/test/TestERC721.sol";
+import {TestERC721} from "../src/utils/TestERC721.sol";
 
-import {TestERC1155} from "../src/contracts/test/TestERC1155.sol";
+import {TestERC1155} from "../src/utils/TestERC1155.sol";
 
 import {BaseOrderTest} from "./utils/BaseOrderTest.sol";
 
@@ -56,7 +45,8 @@ contract WethConverterTest is BaseOrderTest {
         bool isReference;
     }
 
-    address immutable WETH_CONTRACT_ADDRESS = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
+    address immutable WETH_CONTRACT_ADDRESS =
+        0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
 
     WethConverter wethConverter;
     TestERC721 testERC721;
@@ -66,7 +56,10 @@ contract WethConverterTest is BaseOrderTest {
         super.setUp();
 
         wethConverter = WethConverter(
-            deployCode("out/WethConverter.sol/WethConverter.json", abi.encode(address(consideration), WETH_CONTRACT_ADDRESS))
+            deployCode(
+                "out/WethConverter.sol/WethConverter.json",
+                abi.encode(address(consideration), WETH_CONTRACT_ADDRESS)
+            )
         );
 
         testERC721 = new TestERC721();
@@ -97,7 +90,9 @@ contract WethConverterTest is BaseOrderTest {
             .toOrderParameters()
             .withOffer(offer)
             .withConsideration(consideration);
-        OrderLib.empty().withParameters(parameters).saveDefault(WETH_OFFER_721_CONSIDERATION);
+        OrderLib.empty().withParameters(parameters).saveDefault(
+            WETH_OFFER_721_CONSIDERATION
+        );
 
         // Set up and store weth conversion contract order that offers ETH in exchange for WETH
         offer[0] = OfferItemLib
@@ -116,7 +111,9 @@ contract WethConverterTest is BaseOrderTest {
             .withOfferer(address(wethConverter))
             .withOffer(offer)
             .withConsideration(consideration);
-        OrderLib.empty().withParameters(parameters).saveDefault(GET_ETH_FROM_WETH);
+        OrderLib.empty().withParameters(parameters).saveDefault(
+            GET_ETH_FROM_WETH
+        );
 
         // Set up and store weth conversion contract order that offers WETH in exchange for ETH
         offer[0] = OfferItemLib
@@ -135,25 +132,37 @@ contract WethConverterTest is BaseOrderTest {
             .withOfferer(address(wethConverter))
             .withOffer(offer)
             .withConsideration(consideration);
-        OrderLib.empty().withParameters(parameters).saveDefault(GET_WETH_FROM_ETH);
+        OrderLib.empty().withParameters(parameters).saveDefault(
+            GET_WETH_FROM_ETH
+        );
     }
 
-    function test(function(Context memory) external fn, Context memory context) internal {
+    function test(
+        function(Context memory) external fn,
+        Context memory context
+    ) internal {
         try fn(context) {
-            fail("Stateless test function should have reverted with assertion failure status.");
+            fail(
+                "Stateless test function should have reverted with assertion failure status."
+            );
         } catch (bytes memory reason) {
             assertPass(reason);
         }
     }
 
     function testExecAcceptWethOfferAndGetPaidInEth() public {
-        test(this.execAcceptWethOfferAndGetPaidInEth, Context({isReference: false}));
+        test(
+            this.execAcceptWethOfferAndGetPaidInEth,
+            Context({isReference: false})
+        );
     }
 
-    function execAcceptWethOfferAndGetPaidInEth(Context memory context) external {
+    function execAcceptWethOfferAndGetPaidInEth(
+        Context memory context
+    ) external {
         // Mint 721 token to offerer1
         testERC721.mint(offerer1.addr, 1);
-        
+
         // offerer2 makes 10 weth offer for offerer1's NFT
         bytes memory signature = signOrder(
             getSeaport(),
@@ -166,7 +175,9 @@ contract WethConverterTest is BaseOrderTest {
             .withSignature(signature);
 
         // offerer1 wants to accept the offer but receive eth instead of weth
-        Order memory wethConverterOrder = OrderLib.fromDefault(GET_ETH_FROM_WETH);
+        Order memory wethConverterOrder = OrderLib.fromDefault(
+            GET_ETH_FROM_WETH
+        );
 
         AdvancedOrder[] memory orders = new AdvancedOrder[](2);
         orders[0] = order.toAdvancedOrder({
@@ -179,15 +190,20 @@ contract WethConverterTest is BaseOrderTest {
             numerator: 0,
             denominator: 0,
             extraData: bytes("")
-        });
+        }
 
         fulfillments = SeaportArrays.Fulfillments(
             FulfillmentLib.fromDefault(FF_SF),
             FulfillmentLib.fromDefault(SF_FF)
         );
 
-        seaport.matchAdvancedOrders(orders, new CriteriaResolver[](0), fulfillments, address(0));
+        seaport.matchAdvancedOrders(
+            orders,
+            new CriteriaResolver[](0),
+            fulfillments,
+            address(0)
+        );
 
         assert(testERC721.ownerOf(1) == address(offerer2.addr));
-    }   
+    }
 }

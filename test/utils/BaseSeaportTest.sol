@@ -1,33 +1,21 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.17;
 
-import { stdStorage, StdStorage } from "forge-std/Test.sol";
+import {stdStorage, StdStorage} from "forge-std/Test.sol";
 
-import { DifferentialTest } from "./DifferentialTest.sol";
+import {DifferentialTest} from "./DifferentialTest.sol";
 
-import {
-    ConduitControllerInterface
-} from "seaport-sol/ConduitControllerInterface.sol";
+import {ConduitControllerInterface} from "seaport-sol/ConduitControllerInterface.sol";
 
-import { ConduitController } from "seaport-core/conduit/ConduitController.sol";
+import {ConduitController} from "seaport-core/conduit/ConduitController.sol";
 
-import {
-    ReferenceConduitController
-} from "../../../../reference/conduit/ReferenceConduitController.sol";
+import {ConsiderationInterface} from "seaport-types/interfaces/ConsiderationInterface.sol";
 
-import {
-    ConsiderationInterface
-} from "seaport-types/src/interfaces/ConsiderationInterface.sol";
+import {Consideration} from "seaport-core/lib/Consideration.sol";
 
-import { Consideration } from "seaport-core/src/lib/Consideration.sol";
+import {Conduit} from "seaport-core/conduit/Conduit.sol";
 
-import {
-    ReferenceConsideration
-} from "../../../../reference/ReferenceConsideration.sol";
-
-import { Conduit } from "seaport-core/src/conduit/Conduit.sol";
-
-import { setLabel } from "./Labeler.sol";
+import {setLabel} from "./Labeler.sol";
 
 /// @dev Base test case that deploys Consideration and its dependencies.
 contract BaseSeaportTest is DifferentialTest {
@@ -39,8 +27,6 @@ contract BaseSeaportTest is DifferentialTest {
     Conduit conduit;
     Conduit referenceConduit;
     ConduitControllerInterface conduitController;
-    ConduitControllerInterface referenceConduitController;
-    ConsiderationInterface referenceSeaport;
     ConsiderationInterface seaport;
 
     function stringEq(
@@ -73,12 +59,6 @@ contract BaseSeaportTest is DifferentialTest {
         setLabel(address(conduitController), "conduitController");
         setLabel(address(seaport), "seaport");
         setLabel(address(conduit), "conduit");
-        setLabel(
-            address(referenceConduitController),
-            "referenceConduitController"
-        );
-        setLabel(address(referenceSeaport), "referenceSeaport");
-        setLabel(address(referenceConduit), "referenceConduit");
         setLabel(address(this), "testContract");
     }
 
@@ -105,11 +85,7 @@ contract BaseSeaportTest is DifferentialTest {
     {
         string memory profile = vm.envOr("MOAT_PROFILE", string("optimized"));
 
-        if (stringEq(profile, "reference")) {
-            conduitController_ = referenceConduitController;
-        } else {
-            conduitController_ = conduitController;
-        }
+        conduitController_ = conduitController;
     }
 
     ///@dev deploy optimized consideration contracts from pre-compiled source
@@ -138,40 +114,6 @@ contract BaseSeaportTest is DifferentialTest {
         conduitController.updateChannel(
             address(conduit),
             address(seaport),
-            true
-        );
-    }
-
-    ///@dev deploy reference consideration contracts from pre-compiled source
-    /// (solc-0.8.13, IR pipeline disabled, unless running coverage or debug)
-    function _deployAndConfigurePrecompiledReferenceConsideration() public {
-        if (!coverage_or_debug) {
-            referenceConduitController = ConduitController(
-                deployCode(
-                    "reference-out/ReferenceConduitController.sol/ReferenceConduitController.json"
-                )
-            );
-            referenceSeaport = ConsiderationInterface(
-                deployCode(
-                    "reference-out/ReferenceConsideration.sol/ReferenceConsideration.json",
-                    abi.encode(address(referenceConduitController))
-                )
-            );
-        } else {
-            referenceConduitController = new ReferenceConduitController();
-            // for debugging
-            referenceSeaport = new ReferenceConsideration(
-                address(referenceConduitController)
-            );
-        }
-
-        //create conduit, update channel
-        referenceConduit = Conduit(
-            referenceConduitController.createConduit(conduitKey, address(this))
-        );
-        referenceConduitController.updateChannel(
-            address(referenceConduit),
-            address(referenceSeaport),
             true
         );
     }

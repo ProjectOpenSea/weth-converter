@@ -1,61 +1,37 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.17;
 
-import { Strings } from "@openzeppelin/contracts/utils/Strings.sol";
+import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
 
-import { LibString } from "solady/src/utils/LibString.sol";
+import {LibString} from "solady/src/utils/LibString.sol";
 
-import {
-    FulfillAvailableHelper
-} from "seaport-sol/fulfillments/available/FulfillAvailableHelper.sol";
+import {FulfillAvailableHelper} from "seaport-sol/fulfillments/available/FulfillAvailableHelper.sol";
 
-import {
-    MatchFulfillmentHelper
-} from "seaport-sol/fulfillments/match/MatchFulfillmentHelper.sol";
+import {MatchFulfillmentHelper} from "seaport-sol/fulfillments/match/MatchFulfillmentHelper.sol";
 
-import {
-    AdvancedOrderLib,
-    ConsiderationItemLib,
-    FulfillmentComponentLib,
-    FulfillmentLib,
-    OfferItemLib,
-    OrderComponentsLib,
-    OrderLib,
-    OrderParametersLib,
-    SeaportArrays
-} from "seaport-sol/SeaportSol.sol";
+import {AdvancedOrderLib, ConsiderationItemLib, FulfillmentComponentLib, FulfillmentLib, OfferItemLib, OrderComponentsLib, OrderLib, OrderParametersLib, SeaportArrays} from "seaport-sol/SeaportSol.sol";
 
-import {
-    AdvancedOrder,
-    ConsiderationItem,
-    Fulfillment,
-    FulfillmentComponent,
-    OfferItem,
-    Order,
-    OrderComponents,
-    OrderParameters
-} from "seaport-sol/SeaportStructs.sol";
+import {AdvancedOrder, ConsiderationItem, Fulfillment, FulfillmentComponent, OfferItem, Order, OrderComponents, OrderParameters} from "seaport-sol/SeaportStructs.sol";
 
-import { ItemType, OrderType } from "seaport-sol/SeaportEnums.sol";
+import {ItemType, OrderType} from "seaport-sol/SeaportEnums.sol";
 
-import { SeaportInterface } from "seaport-sol/SeaportInterface.sol";
+import {SeaportInterface} from "seaport-sol/SeaportInterface.sol";
 
-import { setLabel, BaseSeaportTest } from "./BaseSeaportTest.sol";
+import {setLabel, BaseSeaportTest} from "./BaseSeaportTest.sol";
 
-import { ArithmeticUtil } from "./ArithmeticUtil.sol";
+import {ArithmeticUtil} from "./ArithmeticUtil.sol";
 
-import { ERC1155Recipient } from "../../src/contracts/test/ERC1155Recipient.sol";
+import {ERC1155Recipient} from "../../src/utils/ERC1155Recipient.sol";
 
-import { ERC721Recipient } from "../../src/contracts/test/ERC721Recipient.sol";
+import {ERC721Recipient} from "../../src/utils/ERC721Recipient.sol";
 
-import { AmountDeriver } from "seaport-core/lib/AmountDeriver.sol";
+import {AmountDeriver} from "seaport-core/lib/AmountDeriver.sol";
 
-import { TestERC20 } from "../../src/contracts/test/TestERC20.sol";
+import {TestERC20} from "../../src/utils/TestERC20.sol";
 
-import { TestERC721 } from "../../src/contracts/test/TestERC721.sol";
+import {TestERC721} from "../../src/utils/TestERC721.sol";
 
-import { TestERC1155 } from "../../src/contracts/test/TestERC1155.sol";
-
+import {TestERC1155} from "../../src/utils/TestERC1155.sol";
 
 /**
  * @dev This is a base test class for cases that depend on pre-deployed token
