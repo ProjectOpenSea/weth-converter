@@ -7,6 +7,8 @@ import {ContractOffererInterface} from "seaport-types/interfaces/ContractOfferer
 
 import {WethConverter} from "../src/optimized/WethConverter.sol";
 
+import {WETH9} from "../src/utils/WETH9.sol";
+
 import {TestERC721} from "../src/utils/TestERC721.sol";
 
 import {TestERC1155} from "../src/utils/TestERC1155.sol";
@@ -58,6 +60,10 @@ contract WethConverterTest is BaseOrderTest {
 
     function setUp() public override {
         super.setUp();
+
+        WETH9 weth9 = new WETH9();
+        bytes memory wethCode = address(weth9).code;
+        vm.etch(WETH_CONTRACT_ADDRESS, wethCode);
 
         wethConverter = new WethConverter(
             address(seaport),
