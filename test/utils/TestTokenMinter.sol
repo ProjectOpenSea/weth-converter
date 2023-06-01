@@ -101,7 +101,7 @@ contract TestTokenMinter is BaseSeaportTest, ERC721Recipient, ERC1155Recipient {
     function setUp() public virtual override {
         super.setUp();
 
-        preapprovals = [address(consideration), address(conduit)];
+        preapprovals = [address(seaport), address(conduit)];
 
         vm.label(alice, "alice");
         vm.label(bob, "bob");
@@ -246,15 +246,15 @@ contract TestTokenMinter is BaseSeaportTest, ERC721Recipient, ERC1155Recipient {
     function _setApprovals(address _owner) internal virtual {
         vm.startPrank(_owner);
         for (uint256 i = 0; i < erc20s.length; ++i) {
-            erc20s[i].approve(address(consideration), MAX_INT);
+            erc20s[i].approve(address(seaport), MAX_INT);
             erc20s[i].approve(address(conduit), MAX_INT);
         }
         for (uint256 i = 0; i < erc721s.length; ++i) {
-            erc721s[i].setApprovalForAll(address(consideration), true);
+            erc721s[i].setApprovalForAll(address(seaport), true);
             erc721s[i].setApprovalForAll(address(conduit), true);
         }
         for (uint256 i = 0; i < erc1155s.length; ++i) {
-            erc1155s[i].setApprovalForAll(address(consideration), true);
+            erc1155s[i].setApprovalForAll(address(seaport), true);
 
             erc1155s[i].setApprovalForAll(address(conduit), true);
         }

@@ -86,22 +86,9 @@ contract BaseSeaportTest is DifferentialTest {
     ///@dev deploy optimized consideration contracts from pre-compiled source
     //      (solc-0.8.17, IR pipeline enabled, unless running coverage or debug)
     function _deployAndConfigurePrecompiledOptimizedConsideration() public {
-        if (!coverage_or_debug) {
-            conduitController = ConduitController(
-                deployCode(
-                    "optimized-out/ConduitController.sol/ConduitController.json"
-                )
-            );
-            seaport = ConsiderationInterface(
-                deployCode(
-                    "optimized-out/Consideration.sol/Consideration.json",
-                    abi.encode(address(conduitController))
-                )
-            );
-        } else {
-            conduitController = new ConduitController();
-            seaport = new Consideration(address(conduitController));
-        }
+        conduitController = new ConduitController();
+        seaport = new Consideration(address(conduitController));
+
         //create conduit, update channel
         conduit = Conduit(
             conduitController.createConduit(conduitKey, address(this))

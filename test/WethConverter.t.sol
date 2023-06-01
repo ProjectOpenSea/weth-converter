@@ -59,11 +59,9 @@ contract WethConverterTest is BaseOrderTest {
     function setUp() public override {
         super.setUp();
 
-        wethConverter = WethConverter(
-            deployCode(
-                "out/WethConverter.sol/WethConverter.json",
-                abi.encode(address(seaport), WETH_CONTRACT_ADDRESS)
-            )
+        wethConverter = new WethConverter(
+            address(seaport),
+            WETH_CONTRACT_ADDRESS
         );
 
         testERC721 = new TestERC721();
@@ -141,6 +139,17 @@ contract WethConverterTest is BaseOrderTest {
         );
     }
 
+    function test(
+        function(WethContext memory) external fn,
+        WethContext memory context
+    ) internal {
+        try fn(context) {
+            fail("Differential test should have reverted with failure status");
+        } catch (bytes memory reason) {
+            assertPass(reason);
+        }
+    }
+
     function testExecAcceptWethOfferAndGetPaidInEth() public {
         test(
             this.execAcceptWethOfferAndGetPaidInEth,
@@ -149,7 +158,7 @@ contract WethConverterTest is BaseOrderTest {
     }
 
     function execAcceptWethOfferAndGetPaidInEth(
-        Context memory context
+        WethContext memory context
     ) external {
         // Mint 721 token to offerer1
         testERC721.mint(offerer1.addr, 1);

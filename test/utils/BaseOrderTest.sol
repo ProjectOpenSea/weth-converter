@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.17;
 
-import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
+import {Strings} from "./oz/Strings.sol";
 
 import {LibString} from "solady/src/utils/LibString.sol";
 
@@ -45,6 +45,7 @@ contract BaseOrderTest is
     ERC1155Recipient
 {
     using ArithmeticUtil for *;
+    using Strings for uint256;
 
     using AdvancedOrderLib for AdvancedOrder;
     using AdvancedOrderLib for AdvancedOrder[];
