@@ -5,29 +5,17 @@ import { stdStorage, StdStorage } from "forge-std/Test.sol";
 
 import { DifferentialTest } from "./DifferentialTest.sol";
 
-import {
-    ConduitControllerInterface
-} from "seaport-sol/ConduitControllerInterface.sol";
+import { ConduitControllerInterface } from
+    "seaport-sol/ConduitControllerInterface.sol";
 
 import { ConduitController } from "seaport-core/conduit/ConduitController.sol";
 
-import {
-    ReferenceConduitController
-} from "../../../../reference/conduit/ReferenceConduitController.sol";
+import { ConsiderationInterface } from
+    "seaport-types/interfaces/ConsiderationInterface.sol";
 
-import {
-    ConsiderationInterface
-} from "seaport-types/src/interfaces/ConsiderationInterface.sol";
+import { Consideration } from "seaport-core/lib/Consideration.sol";
 
-import { Consideration } from "seaport-core/src/lib/Consideration.sol";
-
-import {
-    ReferenceConsideration
-} from "../../../../reference/ReferenceConsideration.sol";
-
-import { Conduit } from "seaport-core/src/conduit/Conduit.sol";
-
-import { setLabel } from "./Labeler.sol";
+import { Conduit } from "seaport-core/conduit/Conduit.sol";
 
 /// @dev Base test case that deploys Consideration and its dependencies.
 contract BaseSeaportTest is DifferentialTest {
@@ -43,10 +31,11 @@ contract BaseSeaportTest is DifferentialTest {
     ConsiderationInterface referenceSeaport;
     ConsiderationInterface seaport;
 
-    function stringEq(
-        string memory a,
-        string memory b
-    ) internal pure returns (bool) {
+    function stringEq(string memory a, string memory b)
+        internal
+        pure
+        returns (bool)
+    {
         return keccak256(abi.encodePacked(a)) == keccak256(abi.encodePacked(b));
     }
 
@@ -68,18 +57,11 @@ contract BaseSeaportTest is DifferentialTest {
 
         conduitKey = bytes32(uint256(uint160(address(this))) << 96);
         _deployAndConfigurePrecompiledOptimizedConsideration();
-        _deployAndConfigurePrecompiledReferenceConsideration();
 
-        setLabel(address(conduitController), "conduitController");
-        setLabel(address(seaport), "seaport");
-        setLabel(address(conduit), "conduit");
-        setLabel(
-            address(referenceConduitController),
-            "referenceConduitController"
-        );
-        setLabel(address(referenceSeaport), "referenceSeaport");
-        setLabel(address(referenceConduit), "referenceConduit");
-        setLabel(address(this), "testContract");
+        vm.label(address(conduitController), "conduitController");
+        vm.label(address(seaport), "seaport");
+        vm.label(address(conduit), "conduit");
+        vm.label(address(this), "testContract");
     }
 
     /**
@@ -117,13 +99,11 @@ contract BaseSeaportTest is DifferentialTest {
     function _deployAndConfigurePrecompiledOptimizedConsideration() public {
         if (!coverage_or_debug) {
             conduitController = ConduitController(
-                deployCode(
-                    "optimized-out/ConduitController.sol/ConduitController.json"
-                )
+                deployCode("out/ConduitController.sol/ConduitController.json")
             );
             seaport = ConsiderationInterface(
                 deployCode(
-                    "optimized-out/Consideration.sol/Consideration.json",
+                    "out/Consideration.sol/Consideration.json",
                     abi.encode(address(conduitController))
                 )
             );
@@ -132,47 +112,10 @@ contract BaseSeaportTest is DifferentialTest {
             seaport = new Consideration(address(conduitController));
         }
         //create conduit, update channel
-        conduit = Conduit(
-            conduitController.createConduit(conduitKey, address(this))
-        );
+        conduit =
+            Conduit(conduitController.createConduit(conduitKey, address(this)));
         conduitController.updateChannel(
-            address(conduit),
-            address(seaport),
-            true
-        );
-    }
-
-    ///@dev deploy reference consideration contracts from pre-compiled source
-    /// (solc-0.8.13, IR pipeline disabled, unless running coverage or debug)
-    function _deployAndConfigurePrecompiledReferenceConsideration() public {
-        if (!coverage_or_debug) {
-            referenceConduitController = ConduitController(
-                deployCode(
-                    "reference-out/ReferenceConduitController.sol/ReferenceConduitController.json"
-                )
-            );
-            referenceSeaport = ConsiderationInterface(
-                deployCode(
-                    "reference-out/ReferenceConsideration.sol/ReferenceConsideration.json",
-                    abi.encode(address(referenceConduitController))
-                )
-            );
-        } else {
-            referenceConduitController = new ReferenceConduitController();
-            // for debugging
-            referenceSeaport = new ReferenceConsideration(
-                address(referenceConduitController)
-            );
-        }
-
-        //create conduit, update channel
-        referenceConduit = Conduit(
-            referenceConduitController.createConduit(conduitKey, address(this))
-        );
-        referenceConduitController.updateChannel(
-            address(referenceConduit),
-            address(referenceSeaport),
-            true
+            address(conduit), address(seaport), true
         );
     }
 
@@ -181,11 +124,8 @@ contract BaseSeaportTest is DifferentialTest {
         uint256 _pkOfSigner,
         bytes32 _orderHash
     ) internal view returns (bytes memory) {
-        (bytes32 r, bytes32 s, uint8 v) = getSignatureComponents(
-            _consideration,
-            _pkOfSigner,
-            _orderHash
-        );
+        (bytes32 r, bytes32 s, uint8 v) =
+            getSignatureComponents(_consideration, _pkOfSigner, _orderHash);
         return abi.encodePacked(r, s, v);
     }
 
@@ -194,7 +134,7 @@ contract BaseSeaportTest is DifferentialTest {
         uint256 _pkOfSigner,
         bytes32 _orderHash
     ) internal view returns (bytes32, bytes32, uint8) {
-        (, bytes32 domainSeparator, ) = _consideration.information();
+        (, bytes32 domainSeparator,) = _consideration.information();
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(
             _pkOfSigner,
             keccak256(

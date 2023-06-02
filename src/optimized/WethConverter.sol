@@ -1,9 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.13;
 
-import {
-    ContractOffererInterface
-} from "seaport-types/interfaces/ContractOffererInterface.sol";
+import { ContractOffererInterface } from
+    "seaport-types/interfaces/ContractOffererInterface.sol";
 
 import { SeaportInterface } from "seaport-types/interfaces/SeaportInterface.sol";
 
@@ -87,7 +86,7 @@ contract WethConverter is ERC165, ContractOffererInterface {
      * @return consideration An array containing the consideration items.
      */
     function generateOrder(
-        address /* fulfiller */,
+        address, /* fulfiller */
         SpentItem[] calldata minimumReceived,
         SpentItem[] calldata maximumSpent,
         bytes calldata context // encoded based on the schemaID
@@ -114,13 +113,14 @@ contract WethConverter is ERC165, ContractOffererInterface {
 
             // If the item type is too high, or if the item is an ERC20
             // token and the token address is not WETH, the item is invalid.
-            let invalidMaximumSpentItem := or(
-                gt(considerationItemType, 1),
-                and(
-                    considerationItemType,
-                    eq(calldataload(add(maximumSpentItem, 0x20)), weth)
+            let invalidMaximumSpentItem :=
+                or(
+                    gt(considerationItemType, 1),
+                    and(
+                        considerationItemType,
+                        iszero(eq(calldataload(add(maximumSpentItem, 0x20)), weth))
+                    )
                 )
-            )
 
             errorBuffer := or(errorBuffer, shl(3, invalidMaximumSpentItem))
         }
@@ -148,10 +148,11 @@ contract WethConverter is ERC165, ContractOffererInterface {
             // Supply the native tokens to Seaport and update the error buffer
             // if the call fails.
             assembly {
-                errorBuffer := or(
-                    errorBuffer,
-                    shl(7, iszero(call(gas(), seaport, amount, 0, 0, 0, 0)))
-                )
+                errorBuffer :=
+                    or(
+                        errorBuffer,
+                        shl(7, iszero(call(gas(), seaport, amount, 0, 0, 0, 0)))
+                    )
             }
 
             if (minimumReceived.length > 0) {
@@ -184,7 +185,7 @@ contract WethConverter is ERC165, ContractOffererInterface {
      *      ratifyOrder, to reduce the risk of accidental transfers at the cost
      *      of increased overhead.
      */
-    receive() external payable {}
+    receive() external payable { }
 
     function deposit() public payable {
         balanceOf[msg.sender] += msg.value;
@@ -233,10 +234,10 @@ contract WethConverter is ERC165, ContractOffererInterface {
      *                               offerer.
      */
     function ratifyOrder(
-        SpentItem[] calldata /* offer */,
-        ReceivedItem[] calldata /* consideration */,
-        bytes calldata /* context */, // encoded based on the schemaID
-        bytes32[] calldata /* orderHashes */,
+        SpentItem[] calldata, /* offer */
+        ReceivedItem[] calldata, /* consideration */
+        bytes calldata, /* context */ // encoded based on the schemaID
+        bytes32[] calldata, /* orderHashes */
         uint256 /* contractNonce */
     ) external pure override returns (bytes4) {
         assembly {
@@ -264,7 +265,7 @@ contract WethConverter is ERC165, ContractOffererInterface {
      */
     function previewOrder(
         address caller,
-        address /* fulfiller */,
+        address, /* fulfiller */
         SpentItem[] calldata minimumReceived,
         SpentItem[] calldata maximumSpent,
         bytes calldata context // encoded based on the schemaID
@@ -292,13 +293,14 @@ contract WethConverter is ERC165, ContractOffererInterface {
 
             // If the item type is too high, or if the item is an ERC20
             // token and the token address is not WETH, the item is invalid.
-            let invalidMaximumSpentItem := or(
-                gt(considerationItemType, 1),
-                and(
-                    considerationItemType,
-                    eq(calldataload(add(maximumSpentItem, 0x20)), weth)
+            let invalidMaximumSpentItem :=
+                or(
+                    gt(considerationItemType, 1),
+                    and(
+                        considerationItemType,
+                        eq(calldataload(add(maximumSpentItem, 0x20)), weth)
+                    )
                 )
-            )
 
             errorBuffer := or(errorBuffer, shl(3, invalidMaximumSpentItem))
         }
@@ -362,10 +364,14 @@ contract WethConverter is ERC165, ContractOffererInterface {
         return ("WethConverter", schemas);
     }
 
-    function supportsInterface(bytes4 interfaceId) public view override(ERC165, ContractOffererInterface) returns (bool) {
-        return
-            interfaceId == type(ContractOffererInterface).interfaceId ||
-            super.supportsInterface(interfaceId);
+    function supportsInterface(bytes4 interfaceId)
+        public
+        view
+        override(ERC165, ContractOffererInterface)
+        returns (bool)
+    {
+        return interfaceId == type(ContractOffererInterface).interfaceId
+            || super.supportsInterface(interfaceId);
     }
 
     function _wrapIfNecessary(uint256 requiredAmount) internal {
@@ -381,9 +387,9 @@ contract WethConverter is ERC165, ContractOffererInterface {
             }
 
             // Derive the amount to wrap, targeting eventual 50/50 split.
-            uint256 amountToWrap = (currentNativeBalance +
-                currentWrappedBalance +
-                requiredAmount) / 2;
+            uint256 amountToWrap = (
+                currentNativeBalance + currentWrappedBalance + requiredAmount
+            ) / 2;
 
             // Reduce the amount to wrap if it exceeds the native balance.
             if (amountToWrap > currentNativeBalance) {
@@ -415,9 +421,9 @@ contract WethConverter is ERC165, ContractOffererInterface {
             uint256 currentWrappedBalance = _WETH.balanceOf(address(this));
 
             // Derive the amount to unwrap, targeting eventual 50/50 split.
-            uint256 amountToUnwrap = (currentNativeBalance +
-                currentWrappedBalance +
-                requiredAmount) / 2;
+            uint256 amountToUnwrap = (
+                currentNativeBalance + currentWrappedBalance + requiredAmount
+            ) / 2;
 
             // Reduce the amount to unwrap if it exceeds the wrapped balance.
             if (amountToUnwrap > currentWrappedBalance) {
@@ -429,10 +435,11 @@ contract WethConverter is ERC165, ContractOffererInterface {
         }
     }
 
-    function _filterUnavailable(
-        uint256 amount,
-        bytes calldata context
-    ) internal view returns (uint256 reducedAmount) {
+    function _filterUnavailable(uint256 amount, bytes calldata context)
+        internal
+        view
+        returns (uint256 reducedAmount)
+    {
         // Skip if no context is supplied and some amount is supplied.
         if ((_cast(context.length == 0) & _cast(amount != 0)) != 0) {
             return amount;
@@ -468,17 +475,19 @@ contract WethConverter is ERC165, ContractOffererInterface {
             // and underflow will be registered on the error buffer.
             uint256 amountToReduce;
             unchecked {
-                amountToReduce =
-                    (_cast(isCancelled) |
-                        _cast(block.timestamp < condition.startTime) |
-                        _cast(block.timestamp >= condition.endTime) |
-                        (_cast(totalFilled != 0) &
-                            _cast(
-                                (conditionTotalFilled * totalSize) +
-                                    (totalFilled * conditionTotalSize) >
-                                    totalSize * conditionTotalSize
-                            ))) *
-                    condition.amount;
+                amountToReduce = (
+                    _cast(isCancelled)
+                        | _cast(block.timestamp < condition.startTime)
+                        | _cast(block.timestamp >= condition.endTime)
+                        | (
+                            _cast(totalFilled != 0)
+                                & _cast(
+                                    (conditionTotalFilled * totalSize)
+                                        + (totalFilled * conditionTotalSize)
+                                        > totalSize * conditionTotalSize
+                                )
+                        )
+                ) * condition.amount;
 
                 // Set the error buffer if the amount to reduce exceeds amount.
                 errorBuffer |= _cast(amountToReduce > amount);
