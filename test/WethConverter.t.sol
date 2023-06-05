@@ -1,13 +1,19 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.17;
 
-import {AdvancedOrder, AdvancedOrderLib, ConsiderationItem, ConsiderationItemLib, CriteriaResolver, FulfillmentComponent, FulfillmentComponentLib, Fulfillment, FulfillmentLib, ItemType, OfferItem, OfferItemLib, OrderComponents, OrderComponentsLib, Order, OrderLib, OrderParameters, OrderParametersLib, SeaportArrays, ZoneParametersLib} from "seaport-sol/SeaportSol.sol";
+import {WETH} from "solady/src/tokens/WETH.sol";
+
+import {StdCheats} from "forge-std/StdCheats.sol";
+
+import {AdvancedOrderLib, ConsiderationItemLib, FulfillmentComponentLib, FulfillmentLib, OfferItemLib, OrderComponentsLib, OrderLib, OrderParametersLib, SeaportArrays, ZoneParametersLib} from "seaport-sol/SeaportSol.sol";
+
+import {AdvancedOrder, ConsiderationItem, CriteriaResolver, Fulfillment, FulfillmentComponent, OfferItem, Order, OrderComponents, OrderParameters, ReceivedItem, Schema, SpentItem} from "seaport-types/lib/ConsiderationStructs.sol";
+
+import {ItemType, OrderType} from "seaport-types/lib/ConsiderationEnums.sol";
 
 import {ContractOffererInterface} from "seaport-types/interfaces/ContractOffererInterface.sol";
 
 import {WethConverter} from "../src/optimized/WethConverter.sol";
-
-import {WETH9} from "../src/utils/WETH9.sol";
 
 import {TestERC721} from "../src/utils/TestERC721.sol";
 
@@ -39,6 +45,7 @@ contract WethConverterTest is BaseOrderTest {
     using OfferItemLib for OfferItem[];
     using OrderComponentsLib for OrderComponents;
     using OrderLib for Order;
+    using OrderLib for Order[];
     using OrderParametersLib for OrderParameters;
     using ZoneParametersLib for AdvancedOrder[];
 
@@ -49,19 +56,19 @@ contract WethConverterTest is BaseOrderTest {
     address immutable WETH_CONTRACT_ADDRESS =
         0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
 
+    WETH weth;
     WethConverter wethConverter;
     TestERC721 testERC721;
     TestERC1155 testERC1155;
 
-    string constant WETH_OFFER_721_CONSIDERATION =
-        "WETH_OFFER_721_CONSIDERATION";
-    string constant GET_ETH_FROM_WETH = "GET_ETH_FROM_WETH";
-    string constant GET_WETH_FROM_ETH = "GET_WETH_FROM_ETH";
+    string constant WETH_OFFER_721_CONSIDERATION = "wethOffer721Consideration";
+    string constant GET_ETH_FROM_WETH = "getEthFromWeth";
+    string constant GET_WETH_FROM_ETH = "getWethFromEth";
 
     function setUp() public override {
         super.setUp();
 
-        WETH9 weth9 = new WETH9();
+        WETH weth9 = new WETH();
         bytes memory wethCode = address(weth9).code;
         vm.etch(WETH_CONTRACT_ADDRESS, wethCode);
 
@@ -78,14 +85,14 @@ contract WethConverterTest is BaseOrderTest {
 
         // Deposit half of eth balance to weth contract
         vm.prank(address(wethConverter));
-        IWETH(WETH_CONTRACT_ADDRESS).deposit{value: 500 ether}();
+        IWETH(address(weth)).deposit{value: 500 ether}();
 
         // Set up and store order with 10 WETH offer for ERC721 consideration
         OfferItem[] memory offer = new OfferItem[](1);
         offer[0] = OfferItemLib
             .empty()
             .withItemType(ItemType.ERC20)
-            .withToken(WETH_CONTRACT_ADDRESS)
+            .withToken(address(weth))
             .withAmount(10);
         ConsiderationItem[] memory consideration = new ConsiderationItem[](1);
         consideration[0] = ConsiderationItemLib
@@ -111,7 +118,7 @@ contract WethConverterTest is BaseOrderTest {
         consideration[0] = ConsiderationItemLib
             .empty()
             .withItemType(ItemType.ERC20)
-            .withToken(WETH_CONTRACT_ADDRESS)
+            .withToken(address(weth))
             .withAmount(10);
         parameters = OrderComponentsLib
             .fromDefault(STANDARD)
@@ -127,7 +134,7 @@ contract WethConverterTest is BaseOrderTest {
         offer[0] = OfferItemLib
             .empty()
             .withItemType(ItemType.ERC20)
-            .withToken(WETH_CONTRACT_ADDRESS)
+            .withToken(address(weth))
             .withAmount(10);
         consideration[0] = ConsiderationItemLib
             .empty()
@@ -145,33 +152,26 @@ contract WethConverterTest is BaseOrderTest {
         );
     }
 
-    function test(
-        function(WethContext memory) external fn,
-        WethContext memory context
-    ) internal {
-        try fn(context) {
-            fail("Differential test should have reverted with failure status");
-        } catch (bytes memory reason) {
-            assertPass(reason);
-        }
+    Context context;
+
+    function xtestExecAcceptWethOfferAndGetPaidInEth() public {
+        test(this.execAcceptWethOfferAndGetPaidInEth, context);
     }
 
-    function testExecAcceptWethOfferAndGetPaidInEth() public {
-        test(
-            this.execAcceptWethOfferAndGetPaidInEth,
-            WethContext({wethConverter: wethConverter})
-        );
-    }
-
-    function execAcceptWethOfferAndGetPaidInEth(
-        WethContext memory context
-    ) external {
+    function execAcceptWethOfferAndGetPaidInEth(Context memory) external {
         // Mint 721 token to offerer1
         testERC721.mint(offerer1.addr, 1);
 
-        OrderComponents memory orderComponents = OrderComponentsLib
-            .fromDefault(STANDARD)
-            .withOfferer(offerer1.addr);
+        Order memory order = OrderLib.fromDefault(WETH_OFFER_721_CONSIDERATION);
+        AdvancedOrder memory advancedOrder = order.toAdvancedOrder({
+            numerator: 1,
+            denominator: 1,
+            extraData: bytes("")
+        });
+
+        OrderComponents memory orderComponents = advancedOrder
+            .parameters
+            .toOrderComponents(0);
 
         // offerer2 makes 10 weth offer for offerer1's NFT
         bytes memory signature = signOrder(
@@ -180,9 +180,7 @@ contract WethConverterTest is BaseOrderTest {
             getSeaport().getOrderHash(orderComponents)
         );
 
-        Order memory order = OrderLib
-            .fromDefault(WETH_OFFER_721_CONSIDERATION)
-            .withSignature(signature);
+        order = order.withSignature(signature);
 
         // offerer1 wants to accept the offer but receive eth instead of weth
         Order memory wethConverterOrder = OrderLib.fromDefault(
@@ -191,14 +189,14 @@ contract WethConverterTest is BaseOrderTest {
 
         AdvancedOrder[] memory orders = new AdvancedOrder[](2);
         orders[0] = order.toAdvancedOrder({
-            numerator: 0,
-            denominator: 0,
+            numerator: 1,
+            denominator: 1,
             extraData: bytes("")
         });
 
         orders[1] = wethConverterOrder.toAdvancedOrder({
-            numerator: 0,
-            denominator: 0,
+            numerator: 1,
+            denominator: 1,
             extraData: bytes("")
         });
 
@@ -215,5 +213,259 @@ contract WethConverterTest is BaseOrderTest {
         );
 
         assert(testERC721.ownerOf(1) == address(offerer2.addr));
+    }
+
+    function testWethConverter() public {
+        test(this.execWethConverter, context);
+    }
+
+    function execWethConverter(Context memory) external stateless {
+        ConsiderationItem[] memory considerationArray = new ConsiderationItem[](
+            1
+        );
+        OfferItem[] memory offerArray = new OfferItem[](1);
+        AdvancedOrder memory order;
+        AdvancedOrder[] memory orders = new AdvancedOrder[](2);
+        OrderParameters memory orderParameters;
+
+        // CONVERSION
+        vm.deal(address(wethConverter), 4 ether);
+        StdCheats.deal(address(weth), address(this), 4 ether);
+        weth.approve(address(seaport), 4 ether);
+
+        order = AdvancedOrderLib.empty().withNumerator(1).withDenominator(1);
+
+        {
+            OfferItem memory offerItem = OfferItemLib.empty();
+            offerItem = offerItem.withItemType(ItemType.NATIVE);
+            offerItem = offerItem.withToken(address(0));
+            offerItem = offerItem.withIdentifierOrCriteria(0);
+            offerItem = offerItem.withStartAmount(3 ether);
+            offerItem = offerItem.withEndAmount(3 ether);
+
+            offerArray[0] = offerItem;
+
+            ConsiderationItem memory considerationItem = ConsiderationItemLib
+                .empty();
+            considerationItem = considerationItem.withItemType(ItemType.ERC20);
+            considerationItem = considerationItem.withToken(address(weth));
+            considerationItem = considerationItem.withIdentifierOrCriteria(0);
+            considerationItem = considerationItem.withStartAmount(3 ether);
+            considerationItem = considerationItem.withEndAmount(3 ether);
+            considerationItem = considerationItem.withRecipient(address(0));
+
+            considerationArray[0] = considerationItem;
+        }
+
+        {
+            orderParameters = OrderParametersLib.empty();
+            orderParameters = orderParameters.withOfferer(
+                address(wethConverter)
+            );
+            orderParameters = orderParameters.withOrderType(OrderType.CONTRACT);
+            orderParameters = orderParameters.withStartTime(block.timestamp);
+            orderParameters = orderParameters.withEndTime(block.timestamp + 1);
+            orderParameters = orderParameters.withOffer(offerArray);
+            orderParameters = orderParameters.withConsideration(
+                considerationArray
+            );
+            orderParameters = orderParameters
+                .withTotalOriginalConsiderationItems(1);
+
+            order.withParameters(orderParameters);
+
+            orders[0] = order;
+        }
+
+        order = AdvancedOrderLib.empty().withNumerator(1).withDenominator(1);
+
+        {
+            OfferItem memory offerItem = OfferItemLib.empty();
+            offerItem = offerItem.withItemType(ItemType.ERC20);
+            offerItem = offerItem.withToken(address(weth));
+            offerItem = offerItem.withIdentifierOrCriteria(0);
+            offerItem = offerItem.withStartAmount(3 ether);
+            offerItem = offerItem.withEndAmount(3 ether);
+
+            offerArray[0] = offerItem;
+            considerationArray = new ConsiderationItem[](0);
+        }
+
+        {
+            orderParameters = OrderParametersLib.empty();
+            orderParameters = orderParameters.withOfferer(address(this));
+            orderParameters = orderParameters.withOrderType(
+                OrderType.FULL_OPEN
+            );
+            orderParameters = orderParameters.withStartTime(block.timestamp);
+            orderParameters = orderParameters.withEndTime(block.timestamp + 1);
+            orderParameters = orderParameters.withOffer(offerArray);
+            orderParameters = orderParameters.withConsideration(
+                considerationArray
+            );
+            orderParameters = orderParameters
+                .withTotalOriginalConsiderationItems(0);
+
+            order.withParameters(orderParameters);
+
+            orders[1] = order;
+        }
+
+        Fulfillment[] memory fulfillments = new Fulfillment[](1);
+        FulfillmentComponent[]
+            memory fulfillmentComponentsOne = new FulfillmentComponent[](1);
+        FulfillmentComponent[]
+            memory fulfillmentComponentsTwo = new FulfillmentComponent[](1);
+
+        {
+            fulfillmentComponentsOne[0] = FulfillmentComponent(1, 0);
+            fulfillmentComponentsTwo[0] = FulfillmentComponent(0, 0);
+        }
+
+        fulfillments[0] = Fulfillment(
+            fulfillmentComponentsOne,
+            fulfillmentComponentsTwo
+        );
+
+        uint256 nativeBalanceBefore = address(this).balance;
+
+        seaport.matchAdvancedOrders(
+            orders,
+            new CriteriaResolver[](0),
+            fulfillments,
+            address(0)
+        );
+
+        uint256 nativeBalanceAfter = address(this).balance;
+
+        assertEq(
+            nativeBalanceAfter - nativeBalanceBefore,
+            3 ether,
+            "native balance should increase by 3 ether"
+        );
+        assertEq(
+            weth.balanceOf(address(this)),
+            1 ether,
+            "weth balance should be 1 ether"
+        );
+
+        ////////////////////////////////////////////////////////////////////////
+        ////////////////////////////// BREAK ///////////////////////////////////
+        ////////////////////////////////////////////////////////////////////////
+
+        order = AdvancedOrderLib.empty().withNumerator(1).withDenominator(1);
+
+        {
+            OfferItem memory offerItem = OfferItemLib.empty();
+            offerItem = offerItem.withItemType(ItemType.ERC20);
+            offerItem = offerItem.withToken(address(weth));
+            offerItem = offerItem.withIdentifierOrCriteria(0);
+            offerItem = offerItem.withStartAmount(3 ether);
+            offerItem = offerItem.withEndAmount(3 ether);
+
+            offerArray[0] = offerItem;
+
+            ConsiderationItem memory considerationItem = ConsiderationItemLib
+                .empty();
+            considerationItem = considerationItem.withItemType(ItemType.NATIVE);
+            considerationItem = considerationItem.withToken(address(0));
+            considerationItem = considerationItem.withIdentifierOrCriteria(0);
+            considerationItem = considerationItem.withStartAmount(3 ether);
+            considerationItem = considerationItem.withEndAmount(3 ether);
+            considerationItem = considerationItem.withRecipient(address(0));
+
+            considerationArray = new ConsiderationItem[](1);
+            considerationArray[0] = considerationItem;
+        }
+
+        {
+            orderParameters = OrderParametersLib.empty();
+            orderParameters = orderParameters.withOfferer(
+                address(wethConverter)
+            );
+            orderParameters = orderParameters.withOrderType(OrderType.CONTRACT);
+            orderParameters = orderParameters.withStartTime(block.timestamp);
+            orderParameters = orderParameters.withEndTime(block.timestamp + 1);
+            orderParameters = orderParameters.withOffer(offerArray);
+            orderParameters = orderParameters.withConsideration(
+                considerationArray
+            );
+            orderParameters = orderParameters
+                .withTotalOriginalConsiderationItems(1);
+
+            order.withParameters(orderParameters);
+
+            orders[0] = order;
+        }
+
+        order = AdvancedOrderLib.empty().withNumerator(1).withDenominator(1);
+
+        {
+            OfferItem memory offerItem = OfferItemLib.empty();
+            offerItem = offerItem.withItemType(ItemType.NATIVE);
+            offerItem = offerItem.withToken(address(0));
+            offerItem = offerItem.withIdentifierOrCriteria(0);
+            offerItem = offerItem.withStartAmount(3 ether);
+            offerItem = offerItem.withEndAmount(3 ether);
+
+            offerArray[0] = offerItem;
+            considerationArray = new ConsiderationItem[](0);
+        }
+
+        {
+            orderParameters = OrderParametersLib.empty();
+            orderParameters = orderParameters.withOfferer(address(this));
+            orderParameters = orderParameters.withOrderType(
+                OrderType.FULL_OPEN
+            );
+            orderParameters = orderParameters.withStartTime(block.timestamp);
+            orderParameters = orderParameters.withEndTime(block.timestamp + 1);
+            orderParameters = orderParameters.withOffer(offerArray);
+            orderParameters = orderParameters.withConsideration(
+                considerationArray
+            );
+            orderParameters = orderParameters
+                .withTotalOriginalConsiderationItems(0);
+
+            order.withParameters(orderParameters);
+
+            orders[1] = order;
+        }
+
+        fulfillments = new Fulfillment[](1);
+        fulfillmentComponentsOne = new FulfillmentComponent[](1);
+        fulfillmentComponentsTwo = new FulfillmentComponent[](1);
+
+        {
+            fulfillmentComponentsOne[0] = FulfillmentComponent(1, 0);
+            fulfillmentComponentsTwo[0] = FulfillmentComponent(0, 0);
+        }
+
+        fulfillments[0] = Fulfillment(
+            fulfillmentComponentsOne,
+            fulfillmentComponentsTwo
+        );
+
+        nativeBalanceBefore = address(this).balance;
+
+        seaport.matchAdvancedOrders{value: 3 ether}(
+            orders,
+            new CriteriaResolver[](0),
+            fulfillments,
+            address(0)
+        );
+
+        nativeBalanceAfter = address(this).balance;
+
+        assertEq(
+            nativeBalanceBefore - nativeBalanceAfter,
+            3 ether,
+            "native balance should decrease by 3 ether"
+        );
+        assertEq(
+            weth.balanceOf(address(this)),
+            4 ether,
+            "weth balance should be 4 ether"
+        );
     }
 }

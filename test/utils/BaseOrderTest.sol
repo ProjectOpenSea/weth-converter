@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.17;
 
-import {Strings} from "./oz/Strings.sol";
-
 import {LibString} from "solady/src/utils/LibString.sol";
 
 import {FulfillAvailableHelper} from "seaport-sol/fulfillments/available/FulfillAvailableHelper.sol";
@@ -17,7 +15,7 @@ import {ItemType, OrderType} from "seaport-sol/SeaportEnums.sol";
 
 import {SeaportInterface} from "seaport-sol/SeaportInterface.sol";
 
-import {setLabel, BaseSeaportTest} from "./BaseSeaportTest.sol";
+import {BaseSeaportTest} from "./BaseSeaportTest.sol";
 
 import {ArithmeticUtil} from "./ArithmeticUtil.sol";
 
@@ -45,7 +43,6 @@ contract BaseOrderTest is
     ERC1155Recipient
 {
     using ArithmeticUtil for *;
-    using Strings for uint256;
 
     using AdvancedOrderLib for AdvancedOrder;
     using AdvancedOrderLib for AdvancedOrder[];
@@ -75,6 +72,8 @@ contract BaseOrderTest is
         SeaportInterface seaport;
     }
 
+    // SeaportValidatorHelper validatorHelper;
+    // SeaportValidator validator;
     FulfillAvailableHelper fulfill;
     MatchFulfillmentHelper matcher;
 
@@ -88,6 +87,8 @@ contract BaseOrderTest is
     TestERC20[] erc20s;
     TestERC721[] erc721s;
     TestERC1155[] erc1155s;
+
+    // ExpectedBalances public balanceChecker;
 
     address[] preapprovals;
 
@@ -105,7 +106,17 @@ contract BaseOrderTest is
     function setUp() public virtual override {
         super.setUp();
 
-        preapprovals = [address(seaport), address(conduit)];
+        // balanceChecker = new ExpectedBalances();
+
+        // TODO: push to 24 if performance allows
+        // criteriaResolverHelper = new CriteriaResolverHelper(6);
+
+        preapprovals = [
+            address(seaport),
+            address(referenceSeaport),
+            address(conduit),
+            address(referenceConduit)
+        ];
 
         _deployTestTokenContracts();
 
@@ -277,6 +288,7 @@ contract BaseOrderTest is
             createErc721Token();
             createErc1155Token();
         }
+        // preapproved721 = new PreapprovedERC721(preapprovals);
     }
 
     /**
@@ -287,7 +299,7 @@ contract BaseOrderTest is
         i = erc20s.length;
         TestERC20 token = new TestERC20();
         erc20s.push(token);
-        setLabel(address(token), string.concat("ERC20", LibString.toString(i)));
+        vm.label(address(token), string.concat("ERC20", LibString.toString(i)));
     }
 
     /**
@@ -298,7 +310,7 @@ contract BaseOrderTest is
         i = erc721s.length;
         TestERC721 token = new TestERC721();
         erc721s.push(token);
-        setLabel(
+        vm.label(
             address(token),
             string.concat("ERC721", LibString.toString(i))
         );
@@ -312,7 +324,7 @@ contract BaseOrderTest is
         i = erc1155s.length;
         TestERC1155 token = new TestERC1155();
         erc1155s.push(token);
-        setLabel(
+        vm.label(
             address(token),
             string.concat("ERC1155", LibString.toString(i))
         );

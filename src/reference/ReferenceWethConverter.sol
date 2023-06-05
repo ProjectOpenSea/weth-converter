@@ -14,8 +14,6 @@ import {
     SpentItem
 } from "seaport-types/lib/ConsiderationStructs.sol";
 
-import { ERC165 } from "../utils/ERC165.sol";
-
 interface IWETH {
     function withdraw(uint256) external;
 
@@ -44,7 +42,7 @@ struct Condition {
  *         the offered amount based on whether conditional listings are still
  *         available for fulfillment.
  */
-contract WethConverter is ERC165, ContractOffererInterface {
+abstract contract ReferenceWethConverter is ContractOffererInterface {
     SeaportInterface private immutable _SEAPORT;
     IWETH private immutable _WETH;
 
@@ -118,7 +116,7 @@ contract WethConverter is ERC165, ContractOffererInterface {
                     gt(considerationItemType, 1),
                     and(
                         considerationItemType,
-                        iszero(eq(calldataload(add(maximumSpentItem, 0x20)), weth))
+                        eq(calldataload(add(maximumSpentItem, 0x20)), weth)
                     )
                 )
 
@@ -362,16 +360,6 @@ contract WethConverter is ERC165, ContractOffererInterface {
     {
         schemas = new Schema[](0);
         return ("WethConverter", schemas);
-    }
-
-    function supportsInterface(bytes4 interfaceId)
-        public
-        view
-        override(ERC165, ContractOffererInterface)
-        returns (bool)
-    {
-        return interfaceId == type(ContractOffererInterface).interfaceId
-            || super.supportsInterface(interfaceId);
     }
 
     function _wrapIfNecessary(uint256 requiredAmount) internal {

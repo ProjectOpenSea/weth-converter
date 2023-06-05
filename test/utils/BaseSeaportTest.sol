@@ -15,8 +15,6 @@ import {Consideration} from "seaport-core/lib/Consideration.sol";
 
 import {Conduit} from "seaport-core/conduit/Conduit.sol";
 
-import {setLabel} from "./Labeler.sol";
-
 /// @dev Base test case that deploys Consideration and its dependencies.
 contract BaseSeaportTest is DifferentialTest {
     using stdStorage for StdStorage;
@@ -55,10 +53,10 @@ contract BaseSeaportTest is DifferentialTest {
         conduitKey = bytes32(uint256(uint160(address(this))) << 96);
         _deployAndConfigurePrecompiledOptimizedConsideration();
 
-        setLabel(address(conduitController), "conduitController");
-        setLabel(address(seaport), "seaport");
-        setLabel(address(conduit), "conduit");
-        setLabel(address(this), "testContract");
+        vm.label(address(conduitController), "conduitController");
+        vm.label(address(seaport), "seaport");
+        vm.label(address(conduit), "conduit");
+        vm.label(address(this), "testContract");
     }
 
     /**
