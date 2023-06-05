@@ -68,14 +68,8 @@ contract WethConverterTest is BaseOrderTest {
     function setUp() public override {
         super.setUp();
 
-        WETH weth9 = new WETH();
-        bytes memory wethCode = address(weth9).code;
-        vm.etch(WETH_CONTRACT_ADDRESS, wethCode);
-
-        wethConverter = new WethConverter(
-            address(seaport),
-            WETH_CONTRACT_ADDRESS
-        );
+        weth = new WETH();
+        wethConverter = new WethConverter(address(seaport), address(weth));
 
         testERC721 = new TestERC721();
         testERC1155 = new TestERC1155();

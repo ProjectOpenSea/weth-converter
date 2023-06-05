@@ -111,12 +111,7 @@ contract BaseOrderTest is
         // TODO: push to 24 if performance allows
         // criteriaResolverHelper = new CriteriaResolverHelper(6);
 
-        preapprovals = [
-            address(seaport),
-            address(referenceSeaport),
-            address(conduit),
-            address(referenceConduit)
-        ];
+        preapprovals = [address(seaport), address(conduit)];
 
         _deployTestTokenContracts();
 
