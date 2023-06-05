@@ -2,6 +2,7 @@
 src = "src"
 out = "out"
 libs = ["lib"]
+solc = "0.8.17"
 
 remappings = [
     '@rari-capital/solmate/=lib/solmate/',
@@ -9,7 +10,8 @@ remappings = [
     'seaport-core/=lib/seaport-core/src/',
     'seaport-sol/=lib/seaport-sol/src/',
     'seaport-types/=lib/seaport-types/src/',
-    'solady/=lib/solady/'
+    'solady/=lib/solady/',
+    '@openzeppelin=openzeppelin-contracts/'
 ]
 
 [fmt]

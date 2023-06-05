@@ -1,21 +1,19 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.17;
 
-import { stdStorage, StdStorage } from "forge-std/Test.sol";
+import {stdStorage, StdStorage} from "forge-std/Test.sol";
 
-import { DifferentialTest } from "./DifferentialTest.sol";
+import {DifferentialTest} from "./DifferentialTest.sol";
 
-import { ConduitControllerInterface } from
-    "seaport-sol/ConduitControllerInterface.sol";
+import {ConduitControllerInterface} from "seaport-sol/ConduitControllerInterface.sol";
 
-import { ConduitController } from "seaport-core/conduit/ConduitController.sol";
+import {ConduitController} from "seaport-core/conduit/ConduitController.sol";
 
-import { ConsiderationInterface } from
-    "seaport-types/interfaces/ConsiderationInterface.sol";
+import {ConsiderationInterface} from "seaport-types/interfaces/ConsiderationInterface.sol";
 
-import { Consideration } from "seaport-core/lib/Consideration.sol";
+import {Consideration} from "seaport-core/lib/Consideration.sol";
 
-import { Conduit } from "seaport-core/conduit/Conduit.sol";
+import {Conduit} from "seaport-core/conduit/Conduit.sol";
 
 /// @dev Base test case that deploys Consideration and its dependencies.
 contract BaseSeaportTest is DifferentialTest {
@@ -27,15 +25,12 @@ contract BaseSeaportTest is DifferentialTest {
     Conduit conduit;
     Conduit referenceConduit;
     ConduitControllerInterface conduitController;
-    ConduitControllerInterface referenceConduitController;
-    ConsiderationInterface referenceSeaport;
     ConsiderationInterface seaport;
 
-    function stringEq(string memory a, string memory b)
-        internal
-        pure
-        returns (bool)
-    {
+    function stringEq(
+        string memory a,
+        string memory b
+    ) internal pure returns (bool) {
         return keccak256(abi.encodePacked(a)) == keccak256(abi.encodePacked(b));
     }
 
@@ -67,15 +62,12 @@ contract BaseSeaportTest is DifferentialTest {
     /**
      * @dev Get the configured preferred Seaport
      */
-    function getSeaport() internal returns (ConsiderationInterface seaport_) {
-        string memory profile = vm.envOr("MOAT_PROFILE", string("optimized"));
-
-        if (stringEq(profile, "reference")) {
-            emit log("Using reference Seaport and ConduitController");
-            seaport_ = referenceSeaport;
-        } else {
-            seaport_ = seaport;
-        }
+    function getSeaport()
+        internal
+        view
+        returns (ConsiderationInterface seaport_)
+    {
+        seaport_ = seaport;
     }
 
     /**
@@ -83,39 +75,26 @@ contract BaseSeaportTest is DifferentialTest {
      */
     function getConduitController()
         internal
+        view
         returns (ConduitControllerInterface conduitController_)
     {
-        string memory profile = vm.envOr("MOAT_PROFILE", string("optimized"));
-
-        if (stringEq(profile, "reference")) {
-            conduitController_ = referenceConduitController;
-        } else {
-            conduitController_ = conduitController;
-        }
+        conduitController_ = conduitController;
     }
 
     ///@dev deploy optimized consideration contracts from pre-compiled source
     //      (solc-0.8.17, IR pipeline enabled, unless running coverage or debug)
     function _deployAndConfigurePrecompiledOptimizedConsideration() public {
-        if (!coverage_or_debug) {
-            conduitController = ConduitController(
-                deployCode("out/ConduitController.sol/ConduitController.json")
-            );
-            seaport = ConsiderationInterface(
-                deployCode(
-                    "out/Consideration.sol/Consideration.json",
-                    abi.encode(address(conduitController))
-                )
-            );
-        } else {
-            conduitController = new ConduitController();
-            seaport = new Consideration(address(conduitController));
-        }
+        conduitController = new ConduitController();
+        seaport = new Consideration(address(conduitController));
+
         //create conduit, update channel
-        conduit =
-            Conduit(conduitController.createConduit(conduitKey, address(this)));
+        conduit = Conduit(
+            conduitController.createConduit(conduitKey, address(this))
+        );
         conduitController.updateChannel(
-            address(conduit), address(seaport), true
+            address(conduit),
+            address(seaport),
+            true
         );
     }
 
@@ -124,8 +103,11 @@ contract BaseSeaportTest is DifferentialTest {
         uint256 _pkOfSigner,
         bytes32 _orderHash
     ) internal view returns (bytes memory) {
-        (bytes32 r, bytes32 s, uint8 v) =
-            getSignatureComponents(_consideration, _pkOfSigner, _orderHash);
+        (bytes32 r, bytes32 s, uint8 v) = getSignatureComponents(
+            _consideration,
+            _pkOfSigner,
+            _orderHash
+        );
         return abi.encodePacked(r, s, v);
     }
 
@@ -134,7 +116,7 @@ contract BaseSeaportTest is DifferentialTest {
         uint256 _pkOfSigner,
         bytes32 _orderHash
     ) internal view returns (bytes32, bytes32, uint8) {
-        (, bytes32 domainSeparator,) = _consideration.information();
+        (, bytes32 domainSeparator, ) = _consideration.information();
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(
             _pkOfSigner,
             keccak256(
