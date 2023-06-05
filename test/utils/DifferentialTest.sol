@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.17;
 
-import {Test} from "forge-std/Test.sol";
+import { Test } from "forge-std/Test.sol";
 
 contract DifferentialTest is Test {
     ///@dev error to supply
@@ -12,7 +12,9 @@ contract DifferentialTest is Test {
     bytes32 HEVM_FAILED_SLOT = bytes32("failed");
 
     // hash of the bytes surfaced by `revert RevertWithFailureStatus(false)`
-    bytes32 PASSING_HASH = keccak256(abi.encodeWithSelector(RevertWithFailureStatus.selector, false));
+    bytes32 PASSING_HASH = keccak256(
+        abi.encodeWithSelector(RevertWithFailureStatus.selector, false)
+    );
 
     ///@dev reverts after function body with HEVM failure status, which clears all state changes
     ///     but still surfaces assertion failure status.

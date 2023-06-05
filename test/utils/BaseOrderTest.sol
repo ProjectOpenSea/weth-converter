@@ -1,17 +1,13 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.17;
 
-import { Strings } from "@openzeppelin/contracts/utils/Strings.sol";
-
 import { LibString } from "solady/src/utils/LibString.sol";
 
-import {
-    FulfillAvailableHelper
-} from "seaport-sol/fulfillments/available/FulfillAvailableHelper.sol";
+import { FulfillAvailableHelper } from
+    "seaport-sol/fulfillments/available/FulfillAvailableHelper.sol";
 
-import {
-    MatchFulfillmentHelper
-} from "seaport-sol/fulfillments/match/MatchFulfillmentHelper.sol";
+import { MatchFulfillmentHelper } from
+    "seaport-sol/fulfillments/match/MatchFulfillmentHelper.sol";
 
 import {
     AdvancedOrderLib,
@@ -40,22 +36,21 @@ import { ItemType, OrderType } from "seaport-sol/SeaportEnums.sol";
 
 import { SeaportInterface } from "seaport-sol/SeaportInterface.sol";
 
-import { setLabel, BaseSeaportTest } from "./BaseSeaportTest.sol";
+import { BaseSeaportTest } from "./BaseSeaportTest.sol";
 
 import { ArithmeticUtil } from "./ArithmeticUtil.sol";
 
-import { ERC1155Recipient } from "../../src/contracts/test/ERC1155Recipient.sol";
+import { ERC1155Recipient } from "../../src/utils/ERC1155Recipient.sol";
 
-import { ERC721Recipient } from "../../src/contracts/test/ERC721Recipient.sol";
+import { ERC721Recipient } from "../../src/utils/ERC721Recipient.sol";
 
 import { AmountDeriver } from "seaport-core/lib/AmountDeriver.sol";
 
-import { TestERC20 } from "../../src/contracts/test/TestERC20.sol";
+import { TestERC20 } from "../../src/utils/TestERC20.sol";
 
-import { TestERC721 } from "../../src/contracts/test/TestERC721.sol";
+import { TestERC721 } from "../../src/utils/TestERC721.sol";
 
-import { TestERC1155 } from "../../src/contracts/test/TestERC1155.sol";
-
+import { TestERC1155 } from "../../src/utils/TestERC1155.sol";
 
 /**
  * @dev This is a base test class for cases that depend on pre-deployed token
@@ -69,7 +64,6 @@ contract BaseOrderTest is
     ERC1155Recipient
 {
     using ArithmeticUtil for *;
-    using Strings for uint256;
 
     using AdvancedOrderLib for AdvancedOrder;
     using AdvancedOrderLib for AdvancedOrder[];
@@ -99,8 +93,8 @@ contract BaseOrderTest is
         SeaportInterface seaport;
     }
 
-    SeaportValidatorHelper validatorHelper;
-    SeaportValidator validator;
+    // SeaportValidatorHelper validatorHelper;
+    // SeaportValidator validator;
     FulfillAvailableHelper fulfill;
     MatchFulfillmentHelper matcher;
 
@@ -115,7 +109,7 @@ contract BaseOrderTest is
     TestERC721[] erc721s;
     TestERC1155[] erc1155s;
 
-    ExpectedBalances public balanceChecker;
+    // ExpectedBalances public balanceChecker;
 
     address[] preapprovals;
 
@@ -133,10 +127,10 @@ contract BaseOrderTest is
     function setUp() public virtual override {
         super.setUp();
 
-        balanceChecker = new ExpectedBalances();
+        // balanceChecker = new ExpectedBalances();
 
         // TODO: push to 24 if performance allows
-        criteriaResolverHelper = new CriteriaResolverHelper(6);
+        // criteriaResolverHelper = new CriteriaResolverHelper(6);
 
         preapprovals = [
             address(seaport),
@@ -168,103 +162,59 @@ contract BaseOrderTest is
      *      tests.
      */
     function _configureStructDefaults() internal {
-        OfferItemLib
-            .empty()
-            .withItemType(ItemType.ERC721)
-            .withStartAmount(1)
-            .withEndAmount(1)
-            .saveDefault(SINGLE_ERC721);
-        ConsiderationItemLib
-            .empty()
-            .withItemType(ItemType.ERC721)
-            .withStartAmount(1)
-            .withEndAmount(1)
-            .saveDefault(SINGLE_ERC721);
+        OfferItemLib.empty().withItemType(ItemType.ERC721).withStartAmount(1)
+            .withEndAmount(1).saveDefault(SINGLE_ERC721);
+        ConsiderationItemLib.empty().withItemType(ItemType.ERC721)
+            .withStartAmount(1).withEndAmount(1).saveDefault(SINGLE_ERC721);
 
-        OrderComponentsLib
-            .empty()
-            .withOrderType(OrderType.FULL_OPEN)
-            .withStartTime(block.timestamp)
-            .withEndTime(block.timestamp + 100)
+        OrderComponentsLib.empty().withOrderType(OrderType.FULL_OPEN)
+            .withStartTime(block.timestamp).withEndTime(block.timestamp + 100)
             .saveDefault(STANDARD);
 
-        OrderComponentsLib
-            .fromDefault(STANDARD)
-            .withConduitKey(conduitKey)
+        OrderComponentsLib.fromDefault(STANDARD).withConduitKey(conduitKey)
             .saveDefault(STANDARD_CONDUIT);
 
-        AdvancedOrderLib
-            .empty()
-            .withNumerator(1)
-            .withDenominator(1)
-            .saveDefault(FULL);
+        AdvancedOrderLib.empty().withNumerator(1).withDenominator(1).saveDefault(
+            FULL
+        );
 
-        FulfillmentComponentLib
-            .empty()
-            .withOrderIndex(0)
-            .withItemIndex(0)
+        FulfillmentComponentLib.empty().withOrderIndex(0).withItemIndex(0)
             .saveDefault(FIRST_FIRST);
-        FulfillmentComponentLib
-            .empty()
-            .withOrderIndex(0)
-            .withItemIndex(1)
+        FulfillmentComponentLib.empty().withOrderIndex(0).withItemIndex(1)
             .saveDefault(FIRST_SECOND);
-        FulfillmentComponentLib
-            .empty()
-            .withOrderIndex(1)
-            .withItemIndex(0)
+        FulfillmentComponentLib.empty().withOrderIndex(1).withItemIndex(0)
             .saveDefault(SECOND_FIRST);
-        FulfillmentComponentLib
-            .empty()
-            .withOrderIndex(1)
-            .withItemIndex(1)
+        FulfillmentComponentLib.empty().withOrderIndex(1).withItemIndex(1)
             .saveDefault(SECOND_SECOND);
 
-        SeaportArrays
-            .FulfillmentComponents(
-                FulfillmentComponentLib.fromDefault(FIRST_FIRST)
-            )
-            .saveDefaultMany(FIRST_FIRST);
-        SeaportArrays
-            .FulfillmentComponents(
-                FulfillmentComponentLib.fromDefault(FIRST_SECOND)
-            )
-            .saveDefaultMany(FIRST_SECOND);
-        SeaportArrays
-            .FulfillmentComponents(
-                FulfillmentComponentLib.fromDefault(SECOND_FIRST)
-            )
-            .saveDefaultMany(SECOND_FIRST);
-        SeaportArrays
-            .FulfillmentComponents(
-                FulfillmentComponentLib.fromDefault(SECOND_SECOND)
-            )
-            .saveDefaultMany(SECOND_SECOND);
+        SeaportArrays.FulfillmentComponents(
+            FulfillmentComponentLib.fromDefault(FIRST_FIRST)
+        ).saveDefaultMany(FIRST_FIRST);
+        SeaportArrays.FulfillmentComponents(
+            FulfillmentComponentLib.fromDefault(FIRST_SECOND)
+        ).saveDefaultMany(FIRST_SECOND);
+        SeaportArrays.FulfillmentComponents(
+            FulfillmentComponentLib.fromDefault(SECOND_FIRST)
+        ).saveDefaultMany(SECOND_FIRST);
+        SeaportArrays.FulfillmentComponents(
+            FulfillmentComponentLib.fromDefault(SECOND_SECOND)
+        ).saveDefaultMany(SECOND_SECOND);
 
-        FulfillmentLib
-            .empty()
-            .withOfferComponents(
-                FulfillmentComponentLib.fromDefaultMany(SECOND_FIRST)
-            )
-            .withConsiderationComponents(
-                FulfillmentComponentLib.fromDefaultMany(FIRST_FIRST)
-            )
-            .saveDefault(SF_FF);
-        FulfillmentLib
-            .empty()
-            .withOfferComponents(
-                FulfillmentComponentLib.fromDefaultMany(FIRST_FIRST)
-            )
-            .withConsiderationComponents(
-                FulfillmentComponentLib.fromDefaultMany(SECOND_FIRST)
-            )
-            .saveDefault(FF_SF);
+        FulfillmentLib.empty().withOfferComponents(
+            FulfillmentComponentLib.fromDefaultMany(SECOND_FIRST)
+        ).withConsiderationComponents(
+            FulfillmentComponentLib.fromDefaultMany(FIRST_FIRST)
+        ).saveDefault(SF_FF);
+        FulfillmentLib.empty().withOfferComponents(
+            FulfillmentComponentLib.fromDefaultMany(FIRST_FIRST)
+        ).withConsiderationComponents(
+            FulfillmentComponentLib.fromDefaultMany(SECOND_FIRST)
+        ).saveDefault(FF_SF);
     }
 
-    function test(
-        function(Context memory) external fn,
-        Context memory context
-    ) internal {
+    function test(function(Context memory) external fn, Context memory context)
+        internal
+    {
         try fn(context) {
             fail("Differential test should have reverted with failure status");
         } catch (bytes memory reason) {
@@ -277,9 +227,10 @@ contract BaseOrderTest is
      *      instead of internal visibility, so that we can access it in
      *      libraries.
      */
-    function makeAccountWrapper(
-        string memory name
-    ) public returns (Account memory) {
+    function makeAccountWrapper(string memory name)
+        public
+        returns (Account memory)
+    {
         return makeAccount(name);
     }
 
@@ -287,9 +238,10 @@ contract BaseOrderTest is
      * @dev Convenience wrapper for makeAddrAndKey that also allocates tokens,
      *      ether, and approvals.
      */
-    function makeAndAllocateAccount(
-        string memory name
-    ) internal returns (Account memory) {
+    function makeAndAllocateAccount(string memory name)
+        internal
+        returns (Account memory)
+    {
         Account memory account = makeAccountWrapper(name);
         allocateTokensAndApprovals(account.addr, type(uint128).max);
         return account;
@@ -298,9 +250,10 @@ contract BaseOrderTest is
     /**
      * @dev Sets up a new address and sets up token approvals for it.
      */
-    function makeAddrWithAllocationsAndApprovals(
-        string memory label
-    ) internal returns (address) {
+    function makeAddrWithAllocationsAndApprovals(string memory label)
+        internal
+        returns (address)
+    {
         address addr = makeAddr(label);
         allocateTokensAndApprovals(addr, type(uint128).max);
         return addr;
@@ -315,7 +268,7 @@ contract BaseOrderTest is
             createErc721Token();
             createErc1155Token();
         }
-        preapproved721 = new PreapprovedERC721(preapprovals);
+        // preapproved721 = new PreapprovedERC721(preapprovals);
     }
 
     /**
@@ -326,7 +279,7 @@ contract BaseOrderTest is
         i = erc20s.length;
         TestERC20 token = new TestERC20();
         erc20s.push(token);
-        setLabel(address(token), string.concat("ERC20", LibString.toString(i)));
+        vm.label(address(token), string.concat("ERC20", LibString.toString(i)));
     }
 
     /**
@@ -337,10 +290,7 @@ contract BaseOrderTest is
         i = erc721s.length;
         TestERC721 token = new TestERC721();
         erc721s.push(token);
-        setLabel(
-            address(token),
-            string.concat("ERC721", LibString.toString(i))
-        );
+        vm.label(address(token), string.concat("ERC721", LibString.toString(i)));
     }
 
     /**
@@ -351,9 +301,8 @@ contract BaseOrderTest is
         i = erc1155s.length;
         TestERC1155 token = new TestERC1155();
         erc1155s.push(token);
-        setLabel(
-            address(token),
-            string.concat("ERC1155", LibString.toString(i))
+        vm.label(
+            address(token), string.concat("ERC1155", LibString.toString(i))
         );
     }
 
@@ -398,5 +347,5 @@ contract BaseOrderTest is
         vm.stopPrank();
     }
 
-    receive() external payable virtual {}
+    receive() external payable virtual { }
 }
