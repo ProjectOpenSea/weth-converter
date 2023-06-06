@@ -693,8 +693,8 @@ contract WethConverterTest is BaseOrderTest {
 
         assertEq(erc721s[0].ownerOf(0), dillon.addr, "dillon should own nft");
         assertEq(
-            weth.balanceOf(address(wethConverter)),
-            503 ether,
+            weth.balanceOf(address(wethConverter)) - wethConverterBalanceBefore,
+            3 ether,
             "weth converter balance should have increased by 3 ether"
         );
         assertEq(
@@ -702,16 +702,5 @@ contract WethConverterTest is BaseOrderTest {
             3 ether,
             "eve's balance should have increased by 3 ether"
         );
-
-        // assertEq(
-        //     nativeBalanceBefore - nativeBalanceAfter,
-        //     3 ether,
-        //     "native balance should decrease by 3 ether"
-        // );
-        // assertEq(
-        //     weth.balanceOf(address(this)),
-        //     4 ether,
-        //     "weth balance should be 4 ether"
-        // );
     }
 }
