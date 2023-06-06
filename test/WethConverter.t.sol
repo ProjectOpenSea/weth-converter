@@ -15,10 +15,6 @@ import {ContractOffererInterface} from "seaport-types/interfaces/ContractOfferer
 
 import {WethConverter} from "../src/optimized/WethConverter.sol";
 
-import {TestERC721} from "../src/utils/TestERC721.sol";
-
-import {TestERC1155} from "../src/utils/TestERC1155.sol";
-
 import {BaseOrderTest} from "./utils/BaseOrderTest.sol";
 
 import {ReceivedItem, Schema, SpentItem} from "seaport-types/lib/ConsiderationStructs.sol";
@@ -58,8 +54,6 @@ contract WethConverterTest is BaseOrderTest {
 
     WETH weth;
     WethConverter wethConverter;
-    TestERC721 testERC721;
-    TestERC1155 testERC1155;
 
     string constant WETH_OFFER_721_CONSIDERATION = "wethOffer721Consideration";
     string constant GET_ETH_FROM_WETH = "getEthFromWeth";
@@ -70,9 +64,6 @@ contract WethConverterTest is BaseOrderTest {
 
         weth = new WETH();
         wethConverter = new WethConverter(address(seaport), address(weth));
-
-        testERC721 = new TestERC721();
-        testERC1155 = new TestERC1155();
 
         // Fund weth converter with eth
         vm.deal(address(wethConverter), 1000 ether);
@@ -92,7 +83,7 @@ contract WethConverterTest is BaseOrderTest {
         consideration[0] = ConsiderationItemLib
             .empty()
             .withItemType(ItemType.ERC721)
-            .withToken(address(testERC721))
+            .withToken(address(erc721s[0]))
             .withAmount(1);
         OrderParameters memory parameters = OrderComponentsLib
             .fromDefault(STANDARD)
@@ -154,7 +145,7 @@ contract WethConverterTest is BaseOrderTest {
 
     function execAcceptWethOfferAndGetPaidInEth(Context memory) external {
         // Mint 721 token to offerer1
-        testERC721.mint(offerer1.addr, 1);
+        erc721s[0].mint(offerer1.addr, 1);
 
         Order memory order = OrderLib.fromDefault(WETH_OFFER_721_CONSIDERATION);
         AdvancedOrder memory advancedOrder = order.toAdvancedOrder({
@@ -206,7 +197,7 @@ contract WethConverterTest is BaseOrderTest {
             address(0)
         );
 
-        assert(testERC721.ownerOf(1) == address(offerer2.addr));
+        assert(erc721s[0].ownerOf(1) == address(offerer2.addr));
     }
 
     function testWethConverter() public {
@@ -449,15 +440,6 @@ contract WethConverterTest is BaseOrderTest {
             address(0)
         );
 
-        // try fulfillAvailable
-        // use case 1: listed token and offerred token don't match
-        // use case 2: fulfill orders myself but don't want to be paid back in weth/eth
-        // important we test that skipped orders aren't reflected in conversion
-        // contract offerer should only use available orders and convert available orders' amount of eth/weth
-        // use helpers for fulfillavailable and match
-        // horsefacts working on contract
-        // use case 3:
-
         nativeBalanceAfter = address(this).balance;
 
         assertEq(
@@ -477,6 +459,8 @@ contract WethConverterTest is BaseOrderTest {
     }
 
     function execWethConverterMatch(Context memory) external stateless {
+        erc721s[0].mint(eve.addr, 0);
+
         ConsiderationItem[] memory considerationArray = new ConsiderationItem[](
             1
         );
@@ -485,13 +469,14 @@ contract WethConverterTest is BaseOrderTest {
         AdvancedOrder[] memory orders = new AdvancedOrder[](3);
         OrderParameters memory orderParameters;
 
-        // CONVERSION
-        vm.deal(address(wethConverter), 4 ether);
-        StdCheats.deal(address(weth), address(this), 4 ether);
-        weth.approve(address(seaport), 4 ether);
+        // dillon approves seaport to transfer his weth
+        StdCheats.deal(address(weth), dillon.addr, 3 ether);
+        vm.prank(dillon.addr);
+        weth.approve(address(seaport), 3 ether);
 
         order = AdvancedOrderLib.empty().withNumerator(1).withDenominator(1);
 
+        /// DILLON OFFERS 3 WETH FOR EVE'S NFT
         {
             OfferItem memory offerItem = OfferItemLib.empty();
             offerItem = offerItem.withItemType(ItemType.ERC20);
@@ -506,7 +491,7 @@ contract WethConverterTest is BaseOrderTest {
                 .empty();
             considerationItem = considerationItem.withItemType(ItemType.ERC721);
             considerationItem = considerationItem.withToken(
-                address(testERC721)
+                address(erc721s[0])
             );
             considerationItem = considerationItem.withIdentifierOrCriteria(0);
             considerationItem = considerationItem.withStartAmount(1);
@@ -534,10 +519,22 @@ contract WethConverterTest is BaseOrderTest {
             order.withParameters(orderParameters);
 
             orders[0] = order;
+
+            OrderComponents memory orderComponents = orderParameters
+                .toOrderComponents(0);
+
+            bytes memory signature = signOrder(
+                getSeaport(),
+                dillon.key,
+                getSeaport().getOrderHash(orderComponents)
+            );
+
+            order = order.withSignature(signature);
         }
 
         order = AdvancedOrderLib.empty().withNumerator(1).withDenominator(1);
 
+        /// WETH CONVERTER ORDER ///
         {
             OfferItem memory offerItem = OfferItemLib.empty();
             offerItem = offerItem.withItemType(ItemType.NATIVE);
@@ -555,7 +552,9 @@ contract WethConverterTest is BaseOrderTest {
             considerationItem = considerationItem.withIdentifierOrCriteria(0);
             considerationItem = considerationItem.withStartAmount(3 ether);
             considerationItem = considerationItem.withEndAmount(3 ether);
-            considerationItem = considerationItem.withRecipient(address(0)); // look here if shit hits fan
+            considerationItem = considerationItem.withRecipient(
+                address(wethConverter)
+            );
 
             considerationArray[0] = considerationItem;
         }
@@ -582,10 +581,11 @@ contract WethConverterTest is BaseOrderTest {
 
         order = AdvancedOrderLib.empty().withNumerator(1).withDenominator(1);
 
+        /// EVE ACCEPTS OFFER AND RECEIVES 3 ETH
         {
             OfferItem memory offerItem = OfferItemLib.empty();
             offerItem = offerItem.withItemType(ItemType.ERC721);
-            offerItem = offerItem.withToken(address(testERC721));
+            offerItem = offerItem.withToken(address(erc721s[0]));
             offerItem = offerItem.withIdentifierOrCriteria(0);
             offerItem = offerItem.withStartAmount(1);
             offerItem = offerItem.withEndAmount(1);
@@ -599,7 +599,7 @@ contract WethConverterTest is BaseOrderTest {
             considerationItem = considerationItem.withIdentifierOrCriteria(0);
             considerationItem = considerationItem.withStartAmount(3 ether);
             considerationItem = considerationItem.withEndAmount(3 ether);
-            considerationItem = considerationItem.withRecipient(eve.addr); // look here if shit hits fan
+            considerationItem = considerationItem.withRecipient(eve.addr);
 
             considerationArray[0] = considerationItem;
         }
@@ -622,6 +622,17 @@ contract WethConverterTest is BaseOrderTest {
             order.withParameters(orderParameters);
 
             orders[2] = order;
+
+            OrderComponents memory orderComponents = orderParameters
+                .toOrderComponents(0);
+
+            bytes memory signature = signOrder(
+                getSeaport(),
+                eve.key,
+                getSeaport().getOrderHash(orderComponents)
+            );
+
+            order = order.withSignature(signature);
         }
 
         Fulfillment[] memory fulfillments = new Fulfillment[](3);
@@ -637,18 +648,6 @@ contract WethConverterTest is BaseOrderTest {
             memory fulfillmentComponentsFive = new FulfillmentComponent[](1);
         FulfillmentComponent[]
             memory fulfillmentComponentsSix = new FulfillmentComponent[](1);
-
-        // Order 1
-        // Offer: 3 WETH
-        // Consideration: NFT
-
-        // Order 2
-        // Offer: 3 ETH
-        // Consideration 3 WETH
-
-        // Order 3
-        // Offer: NFT
-        // Consideration: 3 ETH
 
         {
             fulfillmentComponentsOne[0] = FulfillmentComponent(2, 0);
@@ -674,11 +673,45 @@ contract WethConverterTest is BaseOrderTest {
             fulfillmentComponentsSix
         );
 
+        uint256 wethConverterBalanceBefore = weth.balanceOf(
+            address(wethConverter)
+        );
+        assertEq(
+            wethConverterBalanceBefore,
+            500 ether,
+            "weth converter balance should be 500 weth"
+        );
+
+        uint256 eveNativeBalanceBefore = eve.addr.balance;
+
         seaport.matchAdvancedOrders{value: 3 ether}(
             orders,
             new CriteriaResolver[](0),
             fulfillments,
             address(0)
         );
+
+        assertEq(erc721s[0].ownerOf(0), dillon.addr, "dillon should own nft");
+        assertEq(
+            weth.balanceOf(address(wethConverter)),
+            503 ether,
+            "weth converter balance should have increased by 3 ether"
+        );
+        assertEq(
+            eve.addr.balance - eveNativeBalanceBefore,
+            3 ether,
+            "eve's balance should have increased by 3 ether"
+        );
+
+        // assertEq(
+        //     nativeBalanceBefore - nativeBalanceAfter,
+        //     3 ether,
+        //     "native balance should decrease by 3 ether"
+        // );
+        // assertEq(
+        //     weth.balanceOf(address(this)),
+        //     4 ether,
+        //     "weth balance should be 4 ether"
+        // );
     }
 }
