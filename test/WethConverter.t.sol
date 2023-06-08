@@ -29,6 +29,15 @@ interface IWETH {
     function approve(address, uint256) external returns (bool);
 }
 
+struct Condition {
+    bytes32 orderHash;
+    uint256 amount;
+    uint256 startTime;
+    uint256 endTime;
+    uint120 fractionToFulfill;
+    uint120 totalSize;
+}
+
 contract WethConverterTest is BaseOrderTest {
     using AdvancedOrderLib for AdvancedOrder;
     using AdvancedOrderLib for AdvancedOrder[];
@@ -986,6 +995,47 @@ contract WethConverterTest is BaseOrderTest {
 
         order = AdvancedOrderLib.empty().withNumerator(1).withDenominator(1);
 
+        order = AdvancedOrderLib.empty().withNumerator(1).withDenominator(1);
+
+        /// WETH CONVERTER OFFERS NOTHING AND CONSIDERS 3 WETH ///
+        {
+            OfferItem memory offerItem = OfferItemLib.empty();
+            offerArray[0] = offerItem;
+
+            ConsiderationItem memory considerationItem = ConsiderationItemLib
+                .empty();
+            considerationItem = considerationItem.withItemType(ItemType.ERC20);
+            considerationItem = considerationItem.withToken(address(weth));
+            considerationItem = considerationItem.withIdentifierOrCriteria(0);
+            considerationItem = considerationItem.withStartAmount(3 ether);
+            considerationItem = considerationItem.withEndAmount(3 ether);
+            considerationItem = considerationItem.withRecipient(
+                address(wethConverter)
+            );
+
+            considerationArray[0] = considerationItem;
+        }
+
+        {
+            orderParameters = OrderParametersLib.empty();
+            orderParameters = orderParameters.withOfferer(
+                address(wethConverter)
+            );
+            orderParameters = orderParameters.withOrderType(OrderType.CONTRACT);
+            orderParameters = orderParameters.withStartTime(block.timestamp);
+            orderParameters = orderParameters.withEndTime(block.timestamp + 1);
+            orderParameters = orderParameters.withOffer(offerArray);
+            orderParameters = orderParameters.withConsideration(
+                considerationArray
+            );
+            orderParameters = orderParameters
+                .withTotalOriginalConsiderationItems(1);
+
+            order.withParameters(orderParameters);
+
+            orders[0] = order;
+        }
+
         /// DILLON OFFERS 1 WETH FOR EVE'S NFT TOKENID 0
         {
             OfferItem memory offerItem = OfferItemLib.empty();
@@ -1028,7 +1078,7 @@ contract WethConverterTest is BaseOrderTest {
 
             order.withParameters(orderParameters);
 
-            orders[0] = order;
+            orders[1] = order;
 
             OrderComponents memory orderComponents = orderParameters
                 .toOrderComponents(0);
@@ -1040,47 +1090,6 @@ contract WethConverterTest is BaseOrderTest {
             );
 
             order = order.withSignature(signature);
-        }
-
-        order = AdvancedOrderLib.empty().withNumerator(1).withDenominator(1);
-
-        /// WETH CONVERTER OFFERS NOTHING AND CONSIDERS 3 WETH ///
-        {
-            OfferItem memory offerItem = OfferItemLib.empty();
-            offerArray[0] = offerItem;
-
-            ConsiderationItem memory considerationItem = ConsiderationItemLib
-                .empty();
-            considerationItem = considerationItem.withItemType(ItemType.ERC20);
-            considerationItem = considerationItem.withToken(address(weth));
-            considerationItem = considerationItem.withIdentifierOrCriteria(0);
-            considerationItem = considerationItem.withStartAmount(3 ether);
-            considerationItem = considerationItem.withEndAmount(3 ether);
-            considerationItem = considerationItem.withRecipient(
-                address(wethConverter)
-            );
-
-            considerationArray[0] = considerationItem;
-        }
-
-        {
-            orderParameters = OrderParametersLib.empty();
-            orderParameters = orderParameters.withOfferer(
-                address(wethConverter)
-            );
-            orderParameters = orderParameters.withOrderType(OrderType.CONTRACT);
-            orderParameters = orderParameters.withStartTime(block.timestamp);
-            orderParameters = orderParameters.withEndTime(block.timestamp + 1);
-            orderParameters = orderParameters.withOffer(offerArray);
-            orderParameters = orderParameters.withConsideration(
-                considerationArray
-            );
-            orderParameters = orderParameters
-                .withTotalOriginalConsiderationItems(1);
-
-            order.withParameters(orderParameters);
-
-            orders[1] = order;
         }
 
         order = AdvancedOrderLib.empty().withNumerator(1).withDenominator(1);
@@ -1138,11 +1147,53 @@ contract WethConverterTest is BaseOrderTest {
             order = order.withSignature(signature);
         }
 
-        // Frank cancels his order before Alice submits
-        OrderComponents[] memory order2Components = new OrderComponents[](1);
-        order2Components[0] = orders[2].parameters.toOrderComponents(0);
+        // Add conditions to weth converter order's extraData
+        {
+            Condition[] memory conditions = new Condition[](2);
+
+            OrderParameters memory orderParametersOne = orders[1].parameters;
+            OrderParameters memory orderParametersTwo = orders[2].parameters;
+
+            // add the other two orders' orderHashes to extraData
+            bytes32 orderHashOne = seaport.getOrderHash(
+                orderParametersOne.toOrderComponents(0)
+            );
+
+            bytes32 orderHashTwo = seaport.getOrderHash(
+                orderParametersTwo.toOrderComponents(0)
+            );
+
+            conditions[0] = Condition({
+                orderHash: orderHashOne,
+                amount: orderParametersOne.offer[0].startAmount,
+                startTime: orderParametersOne.startTime,
+                endTime: orderParametersOne.endTime,
+                fractionToFulfill: 1,
+                totalSize: 1
+            });
+
+            conditions[1] = Condition({
+                orderHash: orderHashTwo,
+                amount: orderParametersTwo.offer[0].startAmount,
+                startTime: orderParametersTwo.startTime,
+                endTime: orderParametersTwo.endTime,
+                fractionToFulfill: 1,
+                totalSize: 1
+            });
+
+            bytes memory extraData = abi.encodePacked(
+                uint8(0),
+                abi.encode(conditions)
+            );
+
+            orders[0].extraData = extraData;
+        }
+
+        // Frank cancels his order before eve submits
+        OrderComponents[] memory orderOneComponents = new OrderComponents[](1);
+        orderOneComponents[0] = orders[2].parameters.toOrderComponents(0);
         vm.prank(frank.addr);
-        seaport.cancel(order2Components);
+        seaport.cancel(orderOneComponents);
 
         (
             FulfillmentComponent[][] memory offerFulfillmentComponents,
@@ -1151,9 +1202,18 @@ contract WethConverterTest is BaseOrderTest {
 
         uint256 eveNativeBalanceBefore = eve.addr.balance;
 
+        uint256 eveWethBalanceBefore = weth.balanceOf(eve.addr);
+
         uint256 frankWethBalanceBefore = weth.balanceOf(frank.addr);
 
         uint256 dillonWethBalanceBefore = weth.balanceOf(dillon.addr);
+
+        uint256 wethConverterWethBalanceBeore = weth.balanceOf(
+            address(wethConverter)
+        );
+
+        uint256 wethConverterNativeBalanceBefore = address(wethConverter)
+            .balance;
 
         // eve submits her order
         vm.prank(eve.addr);
@@ -1168,9 +1228,34 @@ contract WethConverterTest is BaseOrderTest {
         );
 
         assertEq(
+            erc721s[0].ownerOf(1),
+            eve.addr,
+            "eve should still own token 1"
+        );
+
+        assertEq(
+            eveWethBalanceBefore,
+            weth.balanceOf(eve.addr),
+            "eve should have received native tokens instead of weth"
+        );
+
+        assertEq(
             eve.addr.balance - eveNativeBalanceBefore,
             1 ether,
-            "eve's balance should have increased by 1 ether"
+            "eve's native balance should have increased by 1 ether"
+        );
+
+        assertEq(
+            weth.balanceOf(address(wethConverter)) -
+                wethConverterWethBalanceBeore,
+            1 ether,
+            "weth converter's weth balance should have decreased by 1 ether"
+        );
+
+        assertEq(
+            address(wethConverter).balance - wethConverterNativeBalanceBefore,
+            1 ether,
+            "weth converter's native balance should have increased by 1 ether"
         );
 
         assertEq(
@@ -1180,7 +1265,7 @@ contract WethConverterTest is BaseOrderTest {
         );
 
         assertEq(
-            weth.balanceOf(dillon.addr) - dillonWethBalanceBefore,
+            dillonWethBalanceBefore - weth.balanceOf(dillon.addr),
             1 ether,
             "dillon's weth balance should have decreased by 1 ether"
         );
@@ -1189,12 +1274,6 @@ contract WethConverterTest is BaseOrderTest {
             erc721s[0].ownerOf(0),
             dillon.addr,
             "dillon should now own token 1"
-        );
-
-        assertEq(
-            erc721s[0].ownerOf(1),
-            eve.addr,
-            "eve should still own token 1"
         );
     }
 }
