@@ -1271,10 +1271,13 @@ contract WethConverterTest is BaseOrderTest {
     }
 
     function testExecFulfillListingWithCombinedNativeAndWeth() public {
-        test(this.execFulfillListingWithCombinedNativeAndWeth, context);
+        test(
+            this.execFulfillListingWithCombinedNativeAndWethSkip1EthListing,
+            context
+        );
     }
 
-    function execFulfillListingWithCombinedNativeAndWeth(
+    function execFulfillListingWithCombinedNativeAndWethSkip1EthListing(
         Context memory
     ) external stateless {
         // eve lists two NFTs, one for 1 ETH and one for 2 ETH
@@ -1532,15 +1535,15 @@ contract WethConverterTest is BaseOrderTest {
         );
 
         assertEq(
-            erc721s[0].ownerOf(1),
+            erc721s[0].ownerOf(0),
             eve.addr,
-            "eve should still own token 1"
+            "eve should still own token 0"
         );
 
         assertEq(
             eve.addr.balance - eveNativeBalanceBefore,
             2 ether,
-            "eve should have received 1.5 ETH"
+            "eve should have received 2 ETH"
         );
 
         // assertEq(
@@ -1572,6 +1575,314 @@ contract WethConverterTest is BaseOrderTest {
             erc721s[0].ownerOf(1),
             dillon.addr,
             "dillon should now own token 1"
+        );
+    }
+
+    function testExecFulfillListingWithCombinedNativeAndWethSkip2EthListing()
+        public
+    {
+        test(
+            this.execFulfillListingWithCombinedNativeAndWethSkip2EthListing,
+            context
+        );
+    }
+
+    function execFulfillListingWithCombinedNativeAndWethSkip2EthListing(
+        Context memory
+    ) external stateless {
+        // eve lists two NFTs, one for 1 ETH and one for 2 ETH
+        // she cancels her 2 ETH listing
+        // dillon attempts to fulfill both orders with 1.5 WETH and 1.5 ETH
+        // dillon should receive the NFT listed for 1 ETH
+        // dillon should spend 1 WETH
+        // weth converter order should have 1.5 WETH consideration
+        // weth converter should have 1 WETH more 1 ETH less
+        // dillon should have 1 WETH less
+        // eve should have 1 ETH more
+        erc721s[0].mint(eve.addr, 0);
+        erc721s[0].mint(eve.addr, 1);
+
+        ConsiderationItem[] memory considerationArray = new ConsiderationItem[](
+            1
+        );
+        OfferItem[] memory offerArray = new OfferItem[](1);
+        AdvancedOrder memory order;
+        AdvancedOrder[] memory orders = new AdvancedOrder[](3);
+        OrderParameters memory orderParameters;
+
+        order = AdvancedOrderLib.empty().withNumerator(1).withDenominator(1);
+
+        /// WETH CONVERTER OFFERS NOTHING AND CONSIDERS 1.5 WETH ///
+        {
+            OfferItem memory offerItem = OfferItemLib.empty();
+            offerArray[0] = offerItem;
+
+            ConsiderationItem memory considerationItem = ConsiderationItemLib
+                .empty();
+            considerationItem = considerationItem.withItemType(ItemType.ERC20);
+            considerationItem = considerationItem.withToken(address(weth));
+            considerationItem = considerationItem.withIdentifierOrCriteria(0);
+            considerationItem = considerationItem.withStartAmount(1.5 ether);
+            considerationItem = considerationItem.withEndAmount(1.5 ether);
+            considerationItem = considerationItem.withRecipient(
+                address(wethConverter)
+            );
+
+            considerationArray[0] = considerationItem;
+        }
+
+        {
+            orderParameters = OrderParametersLib.empty();
+            orderParameters = orderParameters.withOfferer(
+                address(wethConverter)
+            );
+            orderParameters = orderParameters.withOrderType(OrderType.CONTRACT);
+            orderParameters = orderParameters.withStartTime(block.timestamp);
+            orderParameters = orderParameters.withEndTime(block.timestamp + 1);
+            orderParameters = orderParameters.withOffer(offerArray);
+            orderParameters = orderParameters.withConsideration(
+                considerationArray
+            );
+            orderParameters = orderParameters
+                .withTotalOriginalConsiderationItems(1);
+
+            order.withParameters(orderParameters);
+
+            orders[0] = order;
+        }
+
+        order = AdvancedOrderLib.empty().withNumerator(1).withDenominator(1);
+
+        /// EVE LISTS NFT #0 FOR 1 ETH ///
+        {
+            OfferItem memory offerItem = OfferItemLib.empty();
+            offerItem = offerItem.withItemType(ItemType.ERC721);
+            offerItem = offerItem.withToken(address(erc721s[0]));
+            offerItem = offerItem.withIdentifierOrCriteria(0);
+            offerItem = offerItem.withStartAmount(1);
+            offerItem = offerItem.withEndAmount(1);
+
+            offerArray[0] = offerItem;
+
+            ConsiderationItem memory considerationItem = ConsiderationItemLib
+                .empty();
+            considerationItem = considerationItem.withItemType(ItemType.NATIVE);
+            considerationItem = considerationItem.withToken(address(0));
+            considerationItem = considerationItem.withIdentifierOrCriteria(0);
+            considerationItem = considerationItem.withStartAmount(1 ether);
+            considerationItem = considerationItem.withEndAmount(1 ether);
+            considerationItem = considerationItem.withRecipient(eve.addr);
+
+            considerationArray[0] = considerationItem;
+        }
+
+        {
+            orderParameters = OrderParametersLib.empty();
+            orderParameters = orderParameters.withOfferer(eve.addr);
+            orderParameters = orderParameters.withOrderType(
+                OrderType.FULL_OPEN
+            );
+            orderParameters = orderParameters.withStartTime(block.timestamp);
+            orderParameters = orderParameters.withEndTime(block.timestamp + 1);
+            orderParameters = orderParameters.withOffer(offerArray);
+            orderParameters = orderParameters.withConsideration(
+                considerationArray
+            );
+            orderParameters = orderParameters
+                .withTotalOriginalConsiderationItems(1);
+
+            order.withParameters(orderParameters);
+
+            OrderComponents memory orderComponents = orderParameters
+                .toOrderComponents(0);
+
+            bytes memory signature = signOrder(
+                getSeaport(),
+                eve.key,
+                getSeaport().getOrderHash(orderComponents)
+            );
+
+            order = order.withSignature(signature);
+
+            orders[1] = order;
+        }
+
+        order = AdvancedOrderLib.empty().withNumerator(1).withDenominator(1);
+
+        /// EVE LISTS NFT #1 FOR 2 ETH ///
+        {
+            OfferItem memory offerItem = OfferItemLib.empty();
+            offerItem = offerItem.withItemType(ItemType.ERC721);
+            offerItem = offerItem.withToken(address(erc721s[0]));
+            offerItem = offerItem.withIdentifierOrCriteria(0);
+            offerItem = offerItem.withStartAmount(1);
+            offerItem = offerItem.withEndAmount(1);
+
+            offerArray[0] = offerItem;
+
+            ConsiderationItem memory considerationItem = ConsiderationItemLib
+                .empty();
+            considerationItem = considerationItem.withItemType(ItemType.NATIVE);
+            considerationItem = considerationItem.withToken(address(0));
+            considerationItem = considerationItem.withIdentifierOrCriteria(0);
+            considerationItem = considerationItem.withStartAmount(2 ether);
+            considerationItem = considerationItem.withEndAmount(2 ether);
+            considerationItem = considerationItem.withRecipient(eve.addr);
+
+            considerationArray[0] = considerationItem;
+        }
+
+        {
+            orderParameters = OrderParametersLib.empty();
+            orderParameters = orderParameters.withOfferer(eve.addr);
+            orderParameters = orderParameters.withOrderType(
+                OrderType.FULL_OPEN
+            );
+            orderParameters = orderParameters.withStartTime(block.timestamp);
+            orderParameters = orderParameters.withEndTime(block.timestamp + 1);
+            orderParameters = orderParameters.withOffer(offerArray);
+            orderParameters = orderParameters.withConsideration(
+                considerationArray
+            );
+            orderParameters = orderParameters
+                .withTotalOriginalConsiderationItems(1);
+
+            order.withParameters(orderParameters);
+
+            OrderComponents memory orderComponents = orderParameters
+                .toOrderComponents(0);
+
+            bytes memory signature = signOrder(
+                getSeaport(),
+                eve.key,
+                getSeaport().getOrderHash(orderComponents)
+            );
+
+            order = order.withSignature(signature);
+
+            orders[2] = order;
+        }
+
+        // Add conditions to weth converter order's extraData
+        {
+            Condition[] memory conditions = new Condition[](2);
+
+            OrderParameters memory orderParametersOne = orders[1].parameters;
+            OrderParameters memory orderParametersTwo = orders[2].parameters;
+
+            // add the other two orders' orderHashes to extraData
+            bytes32 orderHashOne = seaport.getOrderHash(
+                orderParametersOne.toOrderComponents(0)
+            );
+
+            bytes32 orderHashTwo = seaport.getOrderHash(
+                orderParametersTwo.toOrderComponents(0)
+            );
+
+            conditions[0] = Condition({
+                orderHash: orderHashOne,
+                amount: orderParametersOne.consideration[0].startAmount,
+                startTime: orderParametersOne.startTime,
+                endTime: orderParametersOne.endTime,
+                fractionToFulfill: 1,
+                totalSize: 1
+            });
+
+            conditions[1] = Condition({
+                orderHash: orderHashTwo,
+                amount: orderParametersTwo.consideration[0].startAmount,
+                startTime: orderParametersTwo.startTime,
+                endTime: orderParametersTwo.endTime,
+                fractionToFulfill: 1,
+                totalSize: 1
+            });
+
+            bytes memory extraData = abi.encodePacked(
+                uint8(0),
+                abi.encode(conditions)
+            );
+
+            orders[0].extraData = extraData;
+        }
+
+        // eve cancels her 1 ETH listing
+        OrderComponents[] memory twoEthListing = new OrderComponents[](1);
+        twoEthListing[0] = orders[2].parameters.toOrderComponents(0);
+        vm.prank(eve.addr);
+        seaport.cancel(twoEthListing);
+
+        (
+            FulfillmentComponent[][] memory offerFulfillmentComponents,
+            FulfillmentComponent[][] memory considerationFulfillmentComponents
+        ) = fulfill.getAggregatedFulfillmentComponents(orders);
+
+        uint256 eveNativeBalanceBefore = eve.addr.balance;
+
+        uint256 eveWethBalanceBefore = weth.balanceOf(eve.addr);
+
+        uint256 dillonNativeBalanceBefore = dillon.addr.balance;
+
+        uint256 dillonWethBalanceBefore = weth.balanceOf(dillon.addr);
+
+        uint256 wethConverterWethBalanceBeore = weth.balanceOf(
+            address(wethConverter)
+        );
+
+        uint256 wethConverterNativeBalanceBefore = address(wethConverter)
+            .balance;
+
+        // dillon attempts to fulfill both listings with 1.5 ETH and 1.5 WETH
+        vm.prank(dillon.addr);
+        seaport.fulfillAvailableAdvancedOrders{value: 1.5 ether}(
+            orders,
+            new CriteriaResolver[](0),
+            offerFulfillmentComponents,
+            considerationFulfillmentComponents,
+            bytes32(0),
+            address(0),
+            100
+        );
+
+        assertEq(
+            erc721s[0].ownerOf(1),
+            eve.addr,
+            "eve should still own token 1"
+        );
+
+        assertEq(
+            eve.addr.balance - eveNativeBalanceBefore,
+            1 ether,
+            "eve should have received 1 ETH"
+        );
+
+        assertEq(
+            wethConverterWethBalanceBeore,
+            weth.balanceOf(address(wethConverter)),
+            "weth converter's weth balance should have increased by 1 ether"
+        );
+
+        assertEq(
+            address(wethConverter).balance,
+            wethConverterNativeBalanceBefore,
+            "weth converter's native balance should have decreased by 1 ether"
+        );
+
+        assertEq(
+            dillonWethBalanceBefore,
+            weth.balanceOf(dillon.addr),
+            "dillon's weth balance should be unchanged"
+        );
+
+        assertEq(
+            dillonNativeBalanceBefore - dillon.addr.balance,
+            1 ether,
+            "dillon's native balance should decrease by 1 ether"
+        );
+
+        assertEq(
+            erc721s[0].ownerOf(0),
+            dillon.addr,
+            "dillon should now own token 0"
         );
     }
 }
