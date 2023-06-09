@@ -1305,9 +1305,6 @@ contract WethConverterTest is BaseOrderTest {
 
         /// WETH CONVERTER OFFERS NOTHING AND CONSIDERS 1.5 WETH ///
         {
-            OfferItem memory offerItem = OfferItemLib.empty();
-            offerArray[0] = offerItem;
-
             ConsiderationItem memory considerationItem = ConsiderationItemLib
                 .empty();
             considerationItem = considerationItem.withItemType(ItemType.ERC20);
@@ -1330,7 +1327,7 @@ contract WethConverterTest is BaseOrderTest {
             orderParameters = orderParameters.withOrderType(OrderType.CONTRACT);
             orderParameters = orderParameters.withStartTime(block.timestamp);
             orderParameters = orderParameters.withEndTime(block.timestamp + 1);
-            orderParameters = orderParameters.withOffer(offerArray);
+            orderParameters = orderParameters.withOffer(new OfferItem[](0));
             orderParameters = orderParameters.withConsideration(
                 considerationArray
             );
@@ -1405,7 +1402,7 @@ contract WethConverterTest is BaseOrderTest {
             OfferItem memory offerItem = OfferItemLib.empty();
             offerItem = offerItem.withItemType(ItemType.ERC721);
             offerItem = offerItem.withToken(address(erc721s[0]));
-            offerItem = offerItem.withIdentifierOrCriteria(0);
+            offerItem = offerItem.withIdentifierOrCriteria(1);
             offerItem = offerItem.withStartAmount(1);
             offerItem = offerItem.withEndAmount(1);
 
@@ -1566,7 +1563,7 @@ contract WethConverterTest is BaseOrderTest {
         );
 
         assertEq(
-            dillon.addr.balance - dillonNativeBalanceBefore,
+            dillonNativeBalanceBefore - dillon.addr.balance,
             1.5 ether,
             "dillon's native balance should have decreased by 1.5 ether"
         );
@@ -1614,9 +1611,6 @@ contract WethConverterTest is BaseOrderTest {
 
         /// WETH CONVERTER OFFERS NOTHING AND CONSIDERS 1.5 WETH ///
         {
-            OfferItem memory offerItem = OfferItemLib.empty();
-            offerArray[0] = offerItem;
-
             ConsiderationItem memory considerationItem = ConsiderationItemLib
                 .empty();
             considerationItem = considerationItem.withItemType(ItemType.ERC20);
@@ -1639,7 +1633,6 @@ contract WethConverterTest is BaseOrderTest {
             orderParameters = orderParameters.withOrderType(OrderType.CONTRACT);
             orderParameters = orderParameters.withStartTime(block.timestamp);
             orderParameters = orderParameters.withEndTime(block.timestamp + 1);
-            orderParameters = orderParameters.withOffer(offerArray);
             orderParameters = orderParameters.withConsideration(
                 considerationArray
             );
