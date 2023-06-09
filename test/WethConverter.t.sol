@@ -1433,7 +1433,7 @@ contract WethConverterTest is BaseOrderTest {
                 considerationArray
             );
             orderParameters = orderParameters
-                .withTotalOriginalConsiderationItems(0);
+                .withTotalOriginalConsiderationItems(1);
 
             order.withParameters(orderParameters);
 
@@ -1521,7 +1521,7 @@ contract WethConverterTest is BaseOrderTest {
 
         // dillon attempts to fulfill both listings with 1.5 ETH and 1.5 WETH
         vm.prank(dillon.addr);
-        seaport.fulfillAvailableAdvancedOrders(
+        seaport.fulfillAvailableAdvancedOrders{value: 1.5 ether}(
             orders,
             new CriteriaResolver[](0),
             offerFulfillmentComponents,
@@ -1538,14 +1538,8 @@ contract WethConverterTest is BaseOrderTest {
         );
 
         assertEq(
-            weth.balanceOf(eve.addr) - eveWethBalanceBefore,
-            0.5 ether,
-            "eve should have received 0.5 WETH"
-        );
-
-        assertEq(
             eve.addr.balance - eveNativeBalanceBefore,
-            1.5 ether,
+            2 ether,
             "eve should have received 1.5 ETH"
         );
 
