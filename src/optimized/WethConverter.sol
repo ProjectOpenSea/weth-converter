@@ -91,31 +91,36 @@ contract WethConverter is ERC165, ContractOffererInterface {
         returns (SpentItem[] memory offer, ReceivedItem[] memory consideration)
     {
         address seaport = address(_SEAPORT);
-        uint256 amount;
 
-        (offer, consideration, amount) = _createOrder(
+        (offer, consideration) = _createOrder(
             msg.sender,
             minimumReceived,
             maximumSpent,
             context
         );
 
-        if (consideration[0].itemType == ItemType.NATIVE) {
-            _wrapIfNecessary(consideration[0].amount);
-        } else {
-            _unwrapIfNecessary(consideration[0].amount);
+        uint256 amount = consideration[0].amount;
 
-            // Supply the native tokens to Seaport
-            // Revert if the call fails.
+        if (consideration[0].itemType == ItemType.NATIVE) {
+            _wrapIfNecessary(amount);
+        } else {
+            _unwrapIfNecessary(amount);
+
+            // Declare a boolean to check if the native token transfer fails.
             bool nativeTokenTransferFailed;
+
+            // If the consideration itemType is WETH, converter needs to transfer
+            // native tokens to Seaport.
             assembly {
+                // Supply the native tokens to Seaport.
                 nativeTokenTransferFailed := iszero(
                     call(gas(), seaport, amount, 0, 0, 0, 0)
                 )
             }
 
+            // Revert if the call fails.
             if (nativeTokenTransferFailed) {
-                revert NativeTokenTransferFailure(address(_SEAPORT), amount);
+                revert NativeTokenTransferFailure(seaport, amount);
             }
         }
     }
@@ -128,14 +133,11 @@ contract WethConverter is ERC165, ContractOffererInterface {
     )
         internal
         view
-        returns (
-            SpentItem[] memory offer,
-            ReceivedItem[] memory consideration,
-            uint256 amount
-        )
+        returns (SpentItem[] memory offer, ReceivedItem[] memory consideration)
     {
         address seaport = address(_SEAPORT);
         address weth = address(_WETH);
+        uint256 amount;
 
         // Declare an error buffer
         uint256 errorBuffer;
@@ -304,7 +306,7 @@ contract WethConverter is ERC165, ContractOffererInterface {
         override
         returns (SpentItem[] memory offer, ReceivedItem[] memory consideration)
     {
-        (offer, consideration, ) = _createOrder(
+        (offer, consideration) = _createOrder(
             caller,
             minimumReceived,
             maximumSpent,
