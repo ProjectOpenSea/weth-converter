@@ -90,6 +90,30 @@ contract WethConverter is ERC165, ContractOffererInterface {
         override
         returns (SpentItem[] memory offer, ReceivedItem[] memory consideration)
     {
+        (offer, consideration) = _createOrder(
+            msg.sender,
+            minimumReceived,
+            maximumSpent,
+            context
+        );
+
+        if (consideration[0].itemType == ItemType.NATIVE) {
+            _wrapIfNecessary(consideration[0].amount);
+        } else {
+            _unwrapIfNecessary(consideration[0].amount);
+        }
+    }
+
+    function _createOrder(
+        address callingAccount,
+        SpentItem[] calldata minimumReceived,
+        SpentItem[] calldata maximumSpent,
+        bytes calldata context
+    )
+        internal
+        view
+        returns (SpentItem[] memory offer, ReceivedItem[] memory consideration)
+    {
         address seaport = address(_SEAPORT);
         address weth = address(_WETH);
 
@@ -97,8 +121,8 @@ contract WethConverter is ERC165, ContractOffererInterface {
         uint256 errorBuffer;
 
         assembly {
-            // First check is that caller is Seaport.
-            errorBuffer := iszero(eq(caller(), seaport))
+            // First check is that fulfiller is Seaport.
+            errorBuffer := iszero(eq(callingAccount, seaport))
             // Next, check the length of the maximum spent array.
             errorBuffer := or(
                 errorBuffer,
@@ -135,17 +159,11 @@ contract WethConverter is ERC165, ContractOffererInterface {
 
         // If a native token is supplied for maximumSpent, wrap & offer WETH.
         if (considerationItemType == ItemType.NATIVE) {
-            _wrapIfNecessary(amount);
-
             offer = new SpentItem[](1);
             offer[0].itemType = ItemType.ERC20;
             offer[0].token = address(_WETH);
             offer[0].amount = amount;
         } else {
-            // Otherwise, unwrap & offer ETH (only supply minimumReceived if a
-            // minimumReceived item was provided).
-            _unwrapIfNecessary(amount);
-
             // Supply the native tokens to Seaport and update the error buffer
             // if the call fails.
             assembly {
@@ -175,8 +193,6 @@ contract WethConverter is ERC165, ContractOffererInterface {
 
         consideration = new ReceivedItem[](1);
         consideration[0] = _copySpentAsReceivedToSelf(maximumSpentItem, amount);
-
-        return (offer, consideration);
     }
 
     /**
@@ -250,6 +266,8 @@ contract WethConverter is ERC165, ContractOffererInterface {
         }
     }
 
+    // TODO:write previewOrder test
+
     /**
      * @dev View function to preview an order generated in response to a minimum
      *      set of received items, maximum set of spent items, and context
@@ -278,73 +296,12 @@ contract WethConverter is ERC165, ContractOffererInterface {
         override
         returns (SpentItem[] memory offer, ReceivedItem[] memory consideration)
     {
-        address seaport = address(_SEAPORT);
-        address weth = address(_WETH);
-
-        // Declare an error buffer; first check is that caller is Seaport.
-        uint256 errorBuffer = _cast(caller != seaport);
-
-        // Next, check the length of the maximum spent array.
-        errorBuffer |= _cast(maximumSpent.length != 1) << 1;
-
-        SpentItem calldata maximumSpentItem = maximumSpent[0];
-
-        ItemType considerationItemType;
-
-        assembly {
-            considerationItemType := calldataload(maximumSpentItem)
-
-            // If the item type is too high, or if the item is an ERC20
-            // token and the token address is not WETH, the item is invalid.
-            let invalidMaximumSpentItem := or(
-                gt(considerationItemType, 1),
-                and(
-                    considerationItemType,
-                    eq(calldataload(add(maximumSpentItem, 0x20)), weth)
-                )
-            )
-
-            errorBuffer := or(errorBuffer, shl(3, invalidMaximumSpentItem))
-        }
-
-        uint256 amount;
-        assembly {
-            amount := calldataload(add(maximumSpentItem, 0x60))
-        }
-
-        amount = _filterUnavailable(amount, context);
-
-        // If a native token is supplied for maximumSpent, offer WETH.
-        if (considerationItemType == ItemType.NATIVE) {
-            offer = new SpentItem[](1);
-            offer[0].itemType = ItemType.ERC20;
-            offer[0].token = address(_WETH);
-            offer[0].amount = amount;
-        } else {
-            // Otherwise, offer ETH (only supply minimumReceived if a
-            // minimumReceived item was provided).
-            if (minimumReceived.length > 0) {
-                offer = new SpentItem[](1);
-                offer[0].amount = amount;
-            }
-        }
-
-        if (errorBuffer > 0) {
-            if (errorBuffer << 255 != 0) {
-                revert InvalidCaller(msg.sender);
-            } else if (errorBuffer << 254 != 0) {
-                revert InvalidTotalMaximumSpentItems(maximumSpent.length);
-            } else if (errorBuffer << 252 != 0) {
-                revert InvalidMaximumSpentItem(maximumSpent[0]);
-            } else if (errorBuffer << 248 != 0) {
-                revert NativeTokenTransferFailure(seaport, amount);
-            }
-        }
-
-        consideration = new ReceivedItem[](1);
-        consideration[0] = _copySpentAsReceivedToSelf(maximumSpentItem, amount);
-
-        return (offer, consideration);
+        (offer, consideration) = _createOrder(
+            caller,
+            minimumReceived,
+            maximumSpent,
+            context
+        );
     }
 
     /**
@@ -424,6 +381,18 @@ contract WethConverter is ERC165, ContractOffererInterface {
             }
         }
     }
+
+    // TODO: if you have 900 weth and 100 eth and go to buy nft for 200 eth
+    // contract offerer will see it doesn't have enough eth
+    // trigger rebalance and unwrap 600 weth to eth
+    // but have 200 weth coming to me
+    // should unwrap to 700 eth 300 weth
+    // receive 200 weth
+    // should end with 500 eth and 500 weth
+
+    // if we're goin to rebalance, lets target 50:50
+    // worthwile to invert (900 eth and 100 weth, nft for 200 weth)
+    // first thing thursday morning to review
 
     function _unwrapIfNecessary(uint256 requiredAmount) internal {
         // Retrieve the native token balance.
