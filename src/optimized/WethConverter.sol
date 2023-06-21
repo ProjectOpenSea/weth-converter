@@ -90,7 +90,10 @@ contract WethConverter is ERC165, ContractOffererInterface {
         override
         returns (SpentItem[] memory offer, ReceivedItem[] memory consideration)
     {
-        (offer, consideration) = _createOrder(
+        address seaport = address(_SEAPORT);
+        uint256 amount;
+
+        (offer, consideration, amount) = _createOrder(
             msg.sender,
             minimumReceived,
             maximumSpent,
@@ -101,6 +104,19 @@ contract WethConverter is ERC165, ContractOffererInterface {
             _wrapIfNecessary(consideration[0].amount);
         } else {
             _unwrapIfNecessary(consideration[0].amount);
+
+            // Supply the native tokens to Seaport
+            // Revert if the call fails.
+            bool nativeTokenTransferFailed;
+            assembly {
+                nativeTokenTransferFailed := iszero(
+                    call(gas(), seaport, amount, 0, 0, 0, 0)
+                )
+            }
+
+            if (nativeTokenTransferFailed) {
+                revert NativeTokenTransferFailure(address(_SEAPORT), amount);
+            }
         }
     }
 
@@ -112,7 +128,11 @@ contract WethConverter is ERC165, ContractOffererInterface {
     )
         internal
         view
-        returns (SpentItem[] memory offer, ReceivedItem[] memory consideration)
+        returns (
+            SpentItem[] memory offer,
+            ReceivedItem[] memory consideration,
+            uint256 amount
+        )
     {
         address seaport = address(_SEAPORT);
         address weth = address(_WETH);
@@ -150,7 +170,6 @@ contract WethConverter is ERC165, ContractOffererInterface {
             errorBuffer := or(errorBuffer, shl(3, invalidMaximumSpentItem))
         }
 
-        uint256 amount;
         assembly {
             amount := calldataload(add(maximumSpentItem, 0x60))
         }
@@ -164,15 +183,6 @@ contract WethConverter is ERC165, ContractOffererInterface {
             offer[0].token = address(_WETH);
             offer[0].amount = amount;
         } else {
-            // Supply the native tokens to Seaport and update the error buffer
-            // if the call fails.
-            assembly {
-                errorBuffer := or(
-                    errorBuffer,
-                    shl(7, iszero(call(gas(), seaport, amount, 0, 0, 0, 0)))
-                )
-            }
-
             if (minimumReceived.length > 0) {
                 offer = new SpentItem[](1);
                 offer[0].amount = amount;
@@ -186,8 +196,6 @@ contract WethConverter is ERC165, ContractOffererInterface {
                 revert InvalidTotalMaximumSpentItems(maximumSpent.length);
             } else if (errorBuffer << 252 != 0) {
                 revert InvalidMaximumSpentItem(maximumSpent[0]);
-            } else if (errorBuffer << 248 != 0) {
-                revert NativeTokenTransferFailure(seaport, amount);
             }
         }
 
@@ -296,7 +304,7 @@ contract WethConverter is ERC165, ContractOffererInterface {
         override
         returns (SpentItem[] memory offer, ReceivedItem[] memory consideration)
     {
-        (offer, consideration) = _createOrder(
+        (offer, consideration, ) = _createOrder(
             caller,
             minimumReceived,
             maximumSpent,
