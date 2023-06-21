@@ -62,9 +62,13 @@ contract WethConverter is ERC165, ContractOffererInterface {
     error InvalidConditions();
 
     constructor(address seaport, address weth) {
+        // Set the Seaport interface with the supplied Seaport constructor argument.
         _SEAPORT = SeaportInterface(seaport);
+
+        // Set the WETH interface with the supplied WETH constructor argument.
         _WETH = IWETH(weth);
 
+        // Set approval for Seaport to transfer the contract offerer's WETH.
         _WETH.approve(seaport, type(uint256).max);
     }
 
@@ -90,8 +94,11 @@ contract WethConverter is ERC165, ContractOffererInterface {
         override
         returns (SpentItem[] memory offer, ReceivedItem[] memory consideration)
     {
+        // Get the Seaport address from the Seaport interface
         address seaport = address(_SEAPORT);
 
+        // Create the WETH Converter contract order and get the
+        // offer and consideration from the created order
         (offer, consideration) = _createOrder(
             msg.sender,
             minimumReceived,
@@ -99,18 +106,25 @@ contract WethConverter is ERC165, ContractOffererInterface {
             context
         );
 
+        // Get the amount from the consideration item.
+        // There should only be a single consideration item on the order.
         uint256 amount = consideration[0].amount;
 
+        // If the converter is considering native tokens, it is offering WETH.
         if (consideration[0].itemType == ItemType.NATIVE) {
+            // Wrap native tokens if necessary to offer an equivalent amount of WETH.
             _wrapIfNecessary(amount);
+
+            // If the converter is considering WETH, it is offering native tokens.
         } else {
+            // Unwrap WETH if necessary to offer an equivalent amount of native tokens.
             _unwrapIfNecessary(amount);
 
             // Declare a boolean to check if the native token transfer fails.
             bool nativeTokenTransferFailed;
 
             // If the consideration itemType is WETH, converter needs to transfer
-            // native tokens to Seaport.
+            // native tokens to Seaport to be spent or transferred to users.
             assembly {
                 // Supply the native tokens to Seaport.
                 nativeTokenTransferFailed := iszero(
@@ -125,6 +139,19 @@ contract WethConverter is ERC165, ContractOffererInterface {
         }
     }
 
+    /**
+     * @dev Internal function to create an order with the specified minimum
+     *      and maximum spent items, and optional context (supplied as extraData).
+     *
+     * @custom:param fulfiller The address of the fulfiller.
+     * @param callingAccount   The address of the account that called the function.
+     * @param minimumReceived  The minimum items that the caller must receive.
+     * @param maximumSpent     The maximum items the caller is willing to spend.
+     * @param context          Additional context of the order.
+     *
+     * @return offer         A tuple containing the offer items.
+     * @return consideration An array containing the consideration items.
+     */
     function _createOrder(
         address callingAccount,
         SpentItem[] calldata minimumReceived,
@@ -135,11 +162,16 @@ contract WethConverter is ERC165, ContractOffererInterface {
         view
         returns (SpentItem[] memory offer, ReceivedItem[] memory consideration)
     {
+        // Get the Seaport address from the Seaport interface
         address seaport = address(_SEAPORT);
+
+        // Get the WETH address from the WETH interface
         address weth = address(_WETH);
+
+        // Declare a variable to store the amount of the consideration item.
         uint256 amount;
 
-        // Declare an error buffer
+        // Declare an error buffer.
         uint256 errorBuffer;
 
         assembly {
@@ -152,11 +184,15 @@ contract WethConverter is ERC165, ContractOffererInterface {
             )
         }
 
+        // Get the maximum spent item.
         SpentItem calldata maximumSpentItem = maximumSpent[0];
 
+        // Declare a variable to store the consideration item type.
         ItemType considerationItemType;
 
         assembly {
+            // Get the consideration itemType from the first word of
+            // maximumSpentItem.
             considerationItemType := calldataload(maximumSpentItem)
 
             // If the item type is too high, or if the item is an ERC20
@@ -169,28 +205,47 @@ contract WethConverter is ERC165, ContractOffererInterface {
                 )
             )
 
+            // TODO: write better comment
+            // Update the error buffer.
             errorBuffer := or(errorBuffer, shl(3, invalidMaximumSpentItem))
         }
 
         assembly {
+            // Get the consideration amount from the fourth word of
+            // maximumSpentItem.
             amount := calldataload(add(maximumSpentItem, 0x60))
         }
 
+        // If items are no longer available, scale down the amount to offer.
         amount = _filterUnavailable(amount, context);
 
-        // If a native token is supplied for maximumSpent, wrap & offer WETH.
+        // If a native token is supplied for maximumSpent, offer WETH.
         if (considerationItemType == ItemType.NATIVE) {
+            // Declare a new SpentItem for the offer.
             offer = new SpentItem[](1);
+
+            // Set the itemType as ERC20.
             offer[0].itemType = ItemType.ERC20;
+
+            // Set the token address as WETH.
             offer[0].token = address(_WETH);
+
+            // Set the amount to offer.
             offer[0].amount = amount;
         } else {
+            // If WETH is supplied for maximumSpent, offer native tokens.
             if (minimumReceived.length > 0) {
+                // Declare a new SpentItem for the offer.
+                // itemType and token address are by default
+                // NATIVE and address(0), respectively.
                 offer = new SpentItem[](1);
+
+                // Set the amount to offer.
                 offer[0].amount = amount;
             }
         }
 
+        // Check the error buffer to see if any errors were encountered.
         if (errorBuffer != 0) {
             if (errorBuffer << 255 != 0) {
                 revert InvalidCaller(msg.sender);
