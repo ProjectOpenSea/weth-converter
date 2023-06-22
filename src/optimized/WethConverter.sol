@@ -48,17 +48,45 @@ contract WethConverter is ERC165, ContractOffererInterface {
     event Deposit(address indexed account, uint256 amount);
     event Withdrawal(address indexed account, uint256 amount);
 
+    /**
+     * @dev Revert with an error when a function is called by an invalid caller.
+     *
+     * @param caller The caller of the function.
+     */
     error InvalidCaller(address caller);
+
+    /**
+     * @dev Revert with an error if the total number of maximumSpentItems supplied
+     *      is not 1.
+     *
+     * @param items The invalid number of maximumSpentItems supplied.
+     */
     error InvalidTotalMaximumSpentItems(uint256 items);
+
+    /**
+     * @dev Revert with an error if the supplied maximumSpentItem is not WETH.
+     *
+     * @param item The invalid maximumSpentItem.
+     */
     error InvalidMaximumSpentItem(SpentItem item);
-    error InsufficientMaximumSpentAmount();
-    error InvalidItems();
-    error InvalidTotalMinimumReceivedItems();
-    error UnsupportedExtraDataVersion(uint8 version);
-    error InvalidExtraDataEncoding(uint8 version);
+
+    /**
+     * @dev Revert with an error if the native token transfer to Seaport fails.
+     *
+     * @param target The target address.
+     * @param amount The amount of native tokens to transfer.
+     */
     error NativeTokenTransferFailure(address target, uint256 amount);
+
+    /**
+     * @dev Revert with an error if a low-level call fails.
+     */
     error CallFailed(); // 0x3204506f
-    error NotImplemented();
+
+    /**
+     * @dev Revert with an error if Conditions are invalid, or amount to offer
+     *      gets scaled down to 0.
+     */
     error InvalidConditions();
 
     constructor(address seaport, address weth) {
