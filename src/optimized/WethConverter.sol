@@ -395,6 +395,12 @@ contract WethConverter is ERC165, ContractOffererInterface {
             super.supportsInterface(interfaceId);
     }
 
+    /**
+     * @dev Internal function to wrap native tokens to WETH if the converter's
+     *      current WETH balance is insufficient.
+     *
+     * @param requiredAmount The amount of WETH required for the order.
+     */
     function _wrapIfNecessary(uint256 requiredAmount) internal {
         // Retrieve the current wrapped balance.
         uint256 currentWrappedBalance;
@@ -458,18 +464,12 @@ contract WethConverter is ERC165, ContractOffererInterface {
         }
     }
 
-    // TODO: if you have 900 weth and 100 eth and go to buy nft for 200 eth
-    // contract offerer will see it doesn't have enough eth
-    // trigger rebalance and unwrap 600 weth to eth
-    // but have 200 weth coming to me
-    // should unwrap to 700 eth 300 weth
-    // receive 200 weth
-    // should end with 500 eth and 500 weth
-
-    // if we're goin to rebalance, lets target 50:50
-    // worthwile to invert (900 eth and 100 weth, nft for 200 weth)
-    // first thing thursday morning to review
-
+    /**
+     * @dev Internal function to unwrap WETH to native tokens if the converter's
+     *      current native balance is insufficient.
+     *
+     * @param requiredAmount The amount of native tokens required for the order.
+     */
     function _unwrapIfNecessary(uint256 requiredAmount) internal {
         // Retrieve the native token balance.
         uint256 currentNativeBalance = address(this).balance;
@@ -523,7 +523,7 @@ contract WethConverter is ERC165, ContractOffererInterface {
     }
 
     /**
-     * @dev Internal view function to reduced the amount offered by the
+     * @dev Internal view function to reduce the amount offered by the
      *      converter if items specified in context are no longer available.
      *
      * @param amount  The original amount of the maximumSpentItem.
