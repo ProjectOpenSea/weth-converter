@@ -140,10 +140,9 @@ contract WethConverter is ERC165, ContractOffererInterface {
     }
 
     /**
-     * @dev Internal function to create an order with the specified minimum
+     * @dev Internal view function to create an order with the specified minimum
      *      and maximum spent items, and optional context (supplied as extraData).
      *
-     * @custom:param fulfiller The address of the fulfiller.
      * @param callingAccount   The address of the account that called the function.
      * @param minimumReceived  The minimum items that the caller must receive.
      * @param maximumSpent     The maximum items the caller is willing to spend.
@@ -403,9 +402,14 @@ contract WethConverter is ERC165, ContractOffererInterface {
         address weth = address(_WETH);
 
         assembly ("memory-safe") {
-            // balanceOf selector
+            // Save the 4-byte balanceOf selector in the first word of memory.
             mstore(0, 0x70a08231)
+
+            // Save the address of this contract at the offset of
+            // the second word of memory.
             mstore(0x20, address())
+
+            // Call balanceOf on the WETH contract.
             if iszero(staticcall(gas(), weth, 0x1c, 0x24, 0, 0x20)) {
                 // CallFailed()
                 mstore(0, 0x3204506f)
@@ -422,8 +426,11 @@ contract WethConverter is ERC165, ContractOffererInterface {
             // Derive the amount to wrap, targeting eventual 50/50 split.
             uint256 amountToWrap;
 
-            // Wrap in unchecked block because of ETH token supply.
+            // Wrap in unchecked block because ETH token supply won't exceed
+            // 2 ** 256.
             unchecked {
+                // Wrap half of (entire weth converter balance + required amount)
+                // to target 50/50 split
                 amountToWrap =
                     (currentNativeBalance +
                         currentWrappedBalance +
@@ -439,8 +446,12 @@ contract WethConverter is ERC165, ContractOffererInterface {
             // Perform the wrap.
             assembly {
                 if iszero(call(gas(), weth, amountToWrap, 0, 0, 0, 0)) {
-                    // CallFailed()
+                    // Save the 4-byte CallFailed() selector to first word
+                    // of memory.
                     mstore(0, 0x3204506f)
+
+                    // Revert with the 4-byte CallFailed() selector at offset
+                    // 0x1c (28).
                     revert(0x1c, 0x04)
                 }
             }
@@ -468,14 +479,20 @@ contract WethConverter is ERC165, ContractOffererInterface {
             // Retrieve the wrapped token balance.
             uint256 currentWrappedBalance;
 
+            // Get WETH address from the WETH Interface.
             address weth = address(_WETH);
 
             assembly ("memory-safe") {
-                // balanceOf selector
+                // Save the 4-byte balanceOf selector to first word of memory.
                 mstore(0, 0x70a08231)
+
+                // Save the address of this contract to second word of memory.
                 mstore(0x20, address())
+
+                // Call balanceOf on the WETH contract.
                 if iszero(staticcall(gas(), weth, 0x1c, 0x24, 0, 0x20)) {
-                    // CallFailed()
+                    // Save the 4-byte CallFailed() selector to first word
+                    // of memory.
                     mstore(0, 0x3204506f)
                     revert(0x1c, 0x04)
                 }
@@ -486,6 +503,8 @@ contract WethConverter is ERC165, ContractOffererInterface {
             uint256 amountToUnwrap;
 
             unchecked {
+                // Unwrap half of (entire weth converter balance + required amount)
+                // to target 50/50 split
                 amountToUnwrap =
                     (currentNativeBalance +
                         currentWrappedBalance +
@@ -503,11 +522,22 @@ contract WethConverter is ERC165, ContractOffererInterface {
         }
     }
 
+    /**
+     * @dev Internal view function to reduced the amount offered by the
+     *      converter if items specified in context are no longer available.
+     *
+     * @param amount  The original amount of the maximumSpentItem.
+     * @param context The items to check for availability, encoded as Condition
+     *                structs.
+     *
+     * @return reducedAmount The reduced amount for the converter to offer.
+     */
     function _filterUnavailable(
         uint256 amount,
         bytes calldata context
     ) internal view returns (uint256 reducedAmount) {
         {
+            // Declare a boolean to indicate if call should return early.
             bool returnEarly;
 
             // Skip if no context is supplied and some amount is supplied.
@@ -515,6 +545,8 @@ contract WethConverter is ERC165, ContractOffererInterface {
                 returnEarly := iszero(or(context.length, iszero(amount)))
             }
 
+            // Return amount early if no context is supplied and some amount
+            // is supplied.
             if (returnEarly) {
                 return amount;
             }
@@ -530,13 +562,17 @@ contract WethConverter is ERC165, ContractOffererInterface {
         // Iterate over each condition.
         uint256 totalConditions = conditions.length;
         for (uint256 i = 0; i < totalConditions; ++i) {
+            // Get the condition at index i.
             Condition memory condition = conditions[i];
 
+            // Get the condition's total size.
             uint256 conditionTotalSize = uint256(condition.totalSize);
+
+            // Get the condition's fraction to fulfill.
             uint256 conditionTotalFilled = uint256(condition.fractionToFulfill);
 
-            // Retrieve the order status for the condition's provided order hash
-            // (Note that contract orders will always appear to be available).
+            // Retrieve the order status for the condition's provided order hash.
+            // Note that contract orders will always appear to be available.
             (
                 ,
                 // bool isValidated
