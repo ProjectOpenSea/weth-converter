@@ -62,9 +62,13 @@ contract WethConverter is ERC165, ContractOffererInterface {
     error InvalidConditions();
 
     constructor(address seaport, address weth) {
+        // Set the Seaport interface with the supplied Seaport constructor argument.
         _SEAPORT = SeaportInterface(seaport);
+
+        // Set the WETH interface with the supplied WETH constructor argument.
         _WETH = IWETH(weth);
 
+        // Set approval for Seaport to transfer the contract offerer's WETH.
         _WETH.approve(seaport, type(uint256).max);
     }
 
@@ -90,15 +94,88 @@ contract WethConverter is ERC165, ContractOffererInterface {
         override
         returns (SpentItem[] memory offer, ReceivedItem[] memory consideration)
     {
+        // Get the Seaport address from the Seaport interface
         address seaport = address(_SEAPORT);
+
+        // Create the WETH Converter contract order and get the
+        // offer and consideration from the created order
+        (offer, consideration) = _createOrder(
+            msg.sender,
+            minimumReceived,
+            maximumSpent,
+            context
+        );
+
+        // Get the amount from the consideration item.
+        // There should only be a single consideration item on the order.
+        uint256 amount = consideration[0].amount;
+
+        // If the converter is considering native tokens, it is offering WETH.
+        if (consideration[0].itemType == ItemType.NATIVE) {
+            // Wrap native tokens if necessary to offer an equivalent amount of WETH.
+            _wrapIfNecessary(amount);
+
+            // If the converter is considering WETH, it is offering native tokens.
+        } else {
+            // Unwrap WETH if necessary to offer an equivalent amount of native tokens.
+            _unwrapIfNecessary(amount);
+
+            // Declare a boolean to check if the native token transfer fails.
+            bool nativeTokenTransferFailed;
+
+            // If the consideration itemType is WETH, converter needs to transfer
+            // native tokens to Seaport to be spent or transferred to users.
+            assembly {
+                // Supply the native tokens to Seaport.
+                nativeTokenTransferFailed := iszero(
+                    call(gas(), seaport, amount, 0, 0, 0, 0)
+                )
+            }
+
+            // Revert if the call fails.
+            if (nativeTokenTransferFailed) {
+                revert NativeTokenTransferFailure(seaport, amount);
+            }
+        }
+    }
+
+    /**
+     * @dev Internal view function to create an order with the specified minimum
+     *      and maximum spent items, and optional context (supplied as extraData).
+     *
+     * @param callingAccount   The address of the account that called the function.
+     * @param minimumReceived  The minimum items that the caller must receive.
+     * @param maximumSpent     The maximum items the caller is willing to spend.
+     * @param context          Additional context of the order.
+     *
+     * @return offer         A tuple containing the offer items.
+     * @return consideration An array containing the consideration items.
+     */
+    function _createOrder(
+        address callingAccount,
+        SpentItem[] calldata minimumReceived,
+        SpentItem[] calldata maximumSpent,
+        bytes calldata context
+    )
+        internal
+        view
+        returns (SpentItem[] memory offer, ReceivedItem[] memory consideration)
+    {
+        // Get the Seaport address from the Seaport interface
+        address seaport = address(_SEAPORT);
+
+        // Get the WETH address from the WETH interface
         address weth = address(_WETH);
 
-        // Declare an error buffer
+        // Declare a variable to store the amount of the consideration item.
+        uint256 amount;
+
+        // Declare an error buffer.
         uint256 errorBuffer;
 
         assembly {
-            // First check is that caller is Seaport.
-            errorBuffer := iszero(eq(caller(), seaport))
+            // First check is that fulfiller is Seaport.
+            errorBuffer := iszero(eq(callingAccount, seaport))
             // Next, check the length of the maximum spent array.
             errorBuffer := or(
                 errorBuffer,
@@ -106,11 +183,15 @@ contract WethConverter is ERC165, ContractOffererInterface {
             )
         }
 
+        // Get the maximum spent item.
         SpentItem calldata maximumSpentItem = maximumSpent[0];
 
+        // Declare a variable to store the consideration item type.
         ItemType considerationItemType;
 
         assembly {
+            // Get the consideration itemType from the first word of
+            // maximumSpentItem.
             considerationItemType := calldataload(maximumSpentItem)
 
             // If the item type is too high, or if the item is an ERC20
@@ -123,44 +204,47 @@ contract WethConverter is ERC165, ContractOffererInterface {
                 )
             )
 
+            // TODO: write better comment
+            // Update the error buffer.
             errorBuffer := or(errorBuffer, shl(3, invalidMaximumSpentItem))
         }
 
-        uint256 amount;
         assembly {
+            // Get the consideration amount from the fourth word of
+            // maximumSpentItem.
             amount := calldataload(add(maximumSpentItem, 0x60))
         }
 
+        // If items are no longer available, scale down the amount to offer.
         amount = _filterUnavailable(amount, context);
 
-        // If a native token is supplied for maximumSpent, wrap & offer WETH.
+        // If a native token is supplied for maximumSpent, offer WETH.
         if (considerationItemType == ItemType.NATIVE) {
-            _wrapIfNecessary(amount);
-
+            // Declare a new SpentItem for the offer.
             offer = new SpentItem[](1);
+
+            // Set the itemType as ERC20.
             offer[0].itemType = ItemType.ERC20;
+
+            // Set the token address as WETH.
             offer[0].token = address(_WETH);
+
+            // Set the amount to offer.
             offer[0].amount = amount;
         } else {
-            // Otherwise, unwrap & offer ETH (only supply minimumReceived if a
-            // minimumReceived item was provided).
-            _unwrapIfNecessary(amount);
-
-            // Supply the native tokens to Seaport and update the error buffer
-            // if the call fails.
-            assembly {
-                errorBuffer := or(
-                    errorBuffer,
-                    shl(7, iszero(call(gas(), seaport, amount, 0, 0, 0, 0)))
-                )
-            }
-
+            // If WETH is supplied for maximumSpent, offer native tokens.
             if (minimumReceived.length > 0) {
+                // Declare a new SpentItem for the offer.
+                // itemType and token address are by default
+                // NATIVE and address(0), respectively.
                 offer = new SpentItem[](1);
+
+                // Set the amount to offer.
                 offer[0].amount = amount;
             }
         }
 
+        // Check the error buffer to see if any errors were encountered.
         if (errorBuffer != 0) {
             if (errorBuffer << 255 != 0) {
                 revert InvalidCaller(msg.sender);
@@ -168,15 +252,11 @@ contract WethConverter is ERC165, ContractOffererInterface {
                 revert InvalidTotalMaximumSpentItems(maximumSpent.length);
             } else if (errorBuffer << 252 != 0) {
                 revert InvalidMaximumSpentItem(maximumSpent[0]);
-            } else if (errorBuffer << 248 != 0) {
-                revert NativeTokenTransferFailure(seaport, amount);
             }
         }
 
         consideration = new ReceivedItem[](1);
         consideration[0] = _copySpentAsReceivedToSelf(maximumSpentItem, amount);
-
-        return (offer, consideration);
     }
 
     /**
@@ -250,6 +330,8 @@ contract WethConverter is ERC165, ContractOffererInterface {
         }
     }
 
+    // TODO:write previewOrder test
+
     /**
      * @dev View function to preview an order generated in response to a minimum
      *      set of received items, maximum set of spent items, and context
@@ -278,73 +360,12 @@ contract WethConverter is ERC165, ContractOffererInterface {
         override
         returns (SpentItem[] memory offer, ReceivedItem[] memory consideration)
     {
-        address seaport = address(_SEAPORT);
-        address weth = address(_WETH);
-
-        // Declare an error buffer; first check is that caller is Seaport.
-        uint256 errorBuffer = _cast(caller != seaport);
-
-        // Next, check the length of the maximum spent array.
-        errorBuffer |= _cast(maximumSpent.length != 1) << 1;
-
-        SpentItem calldata maximumSpentItem = maximumSpent[0];
-
-        ItemType considerationItemType;
-
-        assembly {
-            considerationItemType := calldataload(maximumSpentItem)
-
-            // If the item type is too high, or if the item is an ERC20
-            // token and the token address is not WETH, the item is invalid.
-            let invalidMaximumSpentItem := or(
-                gt(considerationItemType, 1),
-                and(
-                    considerationItemType,
-                    eq(calldataload(add(maximumSpentItem, 0x20)), weth)
-                )
-            )
-
-            errorBuffer := or(errorBuffer, shl(3, invalidMaximumSpentItem))
-        }
-
-        uint256 amount;
-        assembly {
-            amount := calldataload(add(maximumSpentItem, 0x60))
-        }
-
-        amount = _filterUnavailable(amount, context);
-
-        // If a native token is supplied for maximumSpent, offer WETH.
-        if (considerationItemType == ItemType.NATIVE) {
-            offer = new SpentItem[](1);
-            offer[0].itemType = ItemType.ERC20;
-            offer[0].token = address(_WETH);
-            offer[0].amount = amount;
-        } else {
-            // Otherwise, offer ETH (only supply minimumReceived if a
-            // minimumReceived item was provided).
-            if (minimumReceived.length > 0) {
-                offer = new SpentItem[](1);
-                offer[0].amount = amount;
-            }
-        }
-
-        if (errorBuffer > 0) {
-            if (errorBuffer << 255 != 0) {
-                revert InvalidCaller(msg.sender);
-            } else if (errorBuffer << 254 != 0) {
-                revert InvalidTotalMaximumSpentItems(maximumSpent.length);
-            } else if (errorBuffer << 252 != 0) {
-                revert InvalidMaximumSpentItem(maximumSpent[0]);
-            } else if (errorBuffer << 248 != 0) {
-                revert NativeTokenTransferFailure(seaport, amount);
-            }
-        }
-
-        consideration = new ReceivedItem[](1);
-        consideration[0] = _copySpentAsReceivedToSelf(maximumSpentItem, amount);
-
-        return (offer, consideration);
+        (offer, consideration) = _createOrder(
+            caller,
+            minimumReceived,
+            maximumSpent,
+            context
+        );
     }
 
     /**
@@ -374,6 +395,12 @@ contract WethConverter is ERC165, ContractOffererInterface {
             super.supportsInterface(interfaceId);
     }
 
+    /**
+     * @dev Internal function to wrap native tokens to WETH if the converter's
+     *      current WETH balance is insufficient.
+     *
+     * @param requiredAmount The amount of WETH required for the order.
+     */
     function _wrapIfNecessary(uint256 requiredAmount) internal {
         // Retrieve the current wrapped balance.
         uint256 currentWrappedBalance;
@@ -381,9 +408,14 @@ contract WethConverter is ERC165, ContractOffererInterface {
         address weth = address(_WETH);
 
         assembly ("memory-safe") {
-            // balanceOf selector
+            // Save the 4-byte balanceOf selector in the first word of memory.
             mstore(0, 0x70a08231)
+
+            // Save the address of this contract at the offset of
+            // the second word of memory.
             mstore(0x20, address())
+
+            // Call balanceOf on the WETH contract.
             if iszero(staticcall(gas(), weth, 0x1c, 0x24, 0, 0x20)) {
                 // CallFailed()
                 mstore(0, 0x3204506f)
@@ -400,8 +432,11 @@ contract WethConverter is ERC165, ContractOffererInterface {
             // Derive the amount to wrap, targeting eventual 50/50 split.
             uint256 amountToWrap;
 
-            // Wrap in unchecked block because of ETH token supply.
+            // Wrap in unchecked block because ETH token supply won't exceed
+            // 2 ** 256.
             unchecked {
+                // Wrap half of (entire weth converter balance + required amount)
+                // to target 50/50 split
                 amountToWrap =
                     (currentNativeBalance +
                         currentWrappedBalance +
@@ -417,14 +452,24 @@ contract WethConverter is ERC165, ContractOffererInterface {
             // Perform the wrap.
             assembly {
                 if iszero(call(gas(), weth, amountToWrap, 0, 0, 0, 0)) {
-                    // CallFailed()
+                    // Save the 4-byte CallFailed() selector to first word
+                    // of memory.
                     mstore(0, 0x3204506f)
+
+                    // Revert with the 4-byte CallFailed() selector at offset
+                    // 0x1c (28).
                     revert(0x1c, 0x04)
                 }
             }
         }
     }
 
+    /**
+     * @dev Internal function to unwrap WETH to native tokens if the converter's
+     *      current native balance is insufficient.
+     *
+     * @param requiredAmount The amount of native tokens required for the order.
+     */
     function _unwrapIfNecessary(uint256 requiredAmount) internal {
         // Retrieve the native token balance.
         uint256 currentNativeBalance = address(this).balance;
@@ -434,14 +479,20 @@ contract WethConverter is ERC165, ContractOffererInterface {
             // Retrieve the wrapped token balance.
             uint256 currentWrappedBalance;
 
+            // Get WETH address from the WETH Interface.
             address weth = address(_WETH);
 
             assembly ("memory-safe") {
-                // balanceOf selector
+                // Save the 4-byte balanceOf selector to first word of memory.
                 mstore(0, 0x70a08231)
+
+                // Save the address of this contract to second word of memory.
                 mstore(0x20, address())
+
+                // Call balanceOf on the WETH contract.
                 if iszero(staticcall(gas(), weth, 0x1c, 0x24, 0, 0x20)) {
-                    // CallFailed()
+                    // Save the 4-byte CallFailed() selector to first word
+                    // of memory.
                     mstore(0, 0x3204506f)
                     revert(0x1c, 0x04)
                 }
@@ -452,6 +503,8 @@ contract WethConverter is ERC165, ContractOffererInterface {
             uint256 amountToUnwrap;
 
             unchecked {
+                // Unwrap half of (entire weth converter balance + required amount)
+                // to target 50/50 split
                 amountToUnwrap =
                     (currentNativeBalance +
                         currentWrappedBalance +
@@ -469,11 +522,22 @@ contract WethConverter is ERC165, ContractOffererInterface {
         }
     }
 
+    /**
+     * @dev Internal view function to reduce the amount offered by the
+     *      converter if items specified in context are no longer available.
+     *
+     * @param amount  The original amount of the maximumSpentItem.
+     * @param context The items to check for availability, encoded as Condition
+     *                structs.
+     *
+     * @return reducedAmount The reduced amount for the converter to offer.
+     */
     function _filterUnavailable(
         uint256 amount,
         bytes calldata context
     ) internal view returns (uint256 reducedAmount) {
         {
+            // Declare a boolean to indicate if call should return early.
             bool returnEarly;
 
             // Skip if no context is supplied and some amount is supplied.
@@ -481,6 +545,8 @@ contract WethConverter is ERC165, ContractOffererInterface {
                 returnEarly := iszero(or(context.length, iszero(amount)))
             }
 
+            // Return amount early if no context is supplied and some amount
+            // is supplied.
             if (returnEarly) {
                 return amount;
             }
@@ -496,13 +562,17 @@ contract WethConverter is ERC165, ContractOffererInterface {
         // Iterate over each condition.
         uint256 totalConditions = conditions.length;
         for (uint256 i = 0; i < totalConditions; ++i) {
+            // Get the condition at index i.
             Condition memory condition = conditions[i];
 
+            // Get the condition's total size.
             uint256 conditionTotalSize = uint256(condition.totalSize);
+
+            // Get the condition's fraction to fulfill.
             uint256 conditionTotalFilled = uint256(condition.fractionToFulfill);
 
-            // Retrieve the order status for the condition's provided order hash
-            // (Note that contract orders will always appear to be available).
+            // Retrieve the order status for the condition's provided order hash.
+            // Note that contract orders will always appear to be available.
             (
                 ,
                 // bool isValidated
