@@ -40,12 +40,29 @@ struct Condition {
  *         available for fulfillment.
  */
 contract WethConverter is ERC165, ContractOffererInterface {
+    // The Seaport interface used to interact with Seaport
     SeaportInterface private immutable _SEAPORT;
+
+    // The WETH interface used to approve, wrap/unwrap, and check balances of tokens
     IWETH private immutable _WETH;
 
+    // Mapping of account addresses to ETH deposit amounts.
     mapping(address => uint256) public balanceOf;
 
+    /**
+     * @dev Emit an event whenever an account deposits ETH into the contract.
+     *
+     * @param account The address of the depositor account.
+     * @param amount  The amount being deposited.
+     */
     event Deposit(address indexed account, uint256 amount);
+
+    /**
+     * @dev Emit an event whenever an account withdraws ETH from the contract.
+     *
+     * @param account The address of the withdrawing account.
+     * @param amount  The amount being withdrawn.
+     */
     event Withdrawal(address indexed account, uint256 amount);
 
     /**
