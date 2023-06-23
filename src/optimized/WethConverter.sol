@@ -74,6 +74,11 @@ contract WethConverter is ERC165, ContractOffererInterface {
     event Withdrawal(address indexed account, uint256 amount);
 
     /**
+     * @dev Emit an event at deployment to indicate the contract is SIP-5 compatible.
+     */
+    event SeaportCompatibleContractDeployed();
+
+    /**
      * @dev Revert with an error when a function is called by an invalid caller.
      *
      * @param caller The caller of the function.
@@ -123,6 +128,9 @@ contract WethConverter is ERC165, ContractOffererInterface {
 
         // Set approval for Seaport to transfer the contract offerer's WETH.
         _WETH.approve(seaport, type(uint256).max);
+
+        // Emit an event to indicate the contract is SIP-5 compatible.
+        emit SeaportCompatibleContractDeployed();
     }
 
     /**
@@ -463,30 +471,36 @@ contract WethConverter is ERC165, ContractOffererInterface {
         )
     {
         // Declare an array of Schema to return.
-        schemas = new Schema[](2);
+        schemas = new Schema[](1);
 
-        // Set the first SIP schema id to 7.
-        schemas[0].id = 7;
+        // Set the SIP schema id to 11.
+        schemas[0].id = 11;
 
-        // Set the first schema metadata to an empty bytes array.
-        schemas[0].metadata = new bytes(0);
-
-        // Set the second SIP schema id to 11.
-        schemas[1].id = 11;
-
-        // Set the second schema metadata to an encoding of the two tokens
+        // Set the schema metadata to an encoding of the two tokens
         // being converted and their constant exchange rate (1:1)
-        schemas[1].metadata = abi.encode("ETH", "WETH", 10 ** 18);
+        schemas[0].metadata = abi.encode("ETH", "WETH", 10 ** 18);
 
         return ("WethConverter", schemas);
     }
 
+    /**
+     * @dev Implements ERC-165 and returns true for supported interface ids.
+     *
+     * @param interfaceId The interface id to check for implementation.
+     *
+     * @return bool A boolean indicating if the interface is implemented.
+     */
     function supportsInterface(
         bytes4 interfaceId
     ) public view override(ERC165, ContractOffererInterface) returns (bool) {
         return
+            // Return true for the contract offerer interface id.
             interfaceId == type(ContractOffererInterface).interfaceId ||
+            // Return true for `getSeaportMetadata()` to support SIP-5.
             interfaceId == this.getSeaportMetadata.selector ||
+            /// Return true for the Seaport interface being implemented.
+            interfaceId == type(SeaportInterface).interfaceId ||
+            // Return true for ERC-165 interface id.
             super.supportsInterface(interfaceId);
     }
 
