@@ -43,10 +43,10 @@ struct Condition {
  */
 contract WethConverter is ERC165, ContractOffererInterface {
     // The 4-byte error selector of `CallFailed()`
-    uint256 public constant CallFailed_error_selector = 0x3204506f;
+    uint256 private constant CallFailed_error_selector = 0x3204506f;
 
     // The 4-byte function selector of `balanceOf(address)`
-    uint256 public constant Weth_BalanceOf_selector = 0x70a08231;
+    uint256 private constant Weth_BalanceOf_selector = 0x70a08231;
 
     // The Seaport interface used to interact with Seaport
     SeaportInterface private immutable _SEAPORT;
@@ -119,12 +119,75 @@ contract WethConverter is ERC165, ContractOffererInterface {
      */
     error InvalidConditions();
 
-    constructor(address seaport, address weth) {
+    constructor(address seaport) {
+        // Declare a variable for the chain-dependent WETH address.
+        address wethAddress;
+
         // Set the Seaport interface with the supplied Seaport constructor argument.
         _SEAPORT = SeaportInterface(seaport);
 
-        // Set the WETH interface with the supplied WETH constructor argument.
-        _WETH = IWETH(weth);
+        // Set the WETH address based on chain id.
+        if (block.chainid == 1) {
+            // Mainnet
+            wethAddress = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
+        } else if (block.chainid == 5) {
+            // Goerli
+            wethAddress = 0xB4FBF271143F4FBf7B91A5ded31805e42b2208d6;
+        } else if (block.chainid == 11155111) {
+            // Sepolia
+            wethAddress = 0x7b79995e5f793A07Bc00c21412e50Ecae098E7f9;
+        } else if (block.chainid == 137) {
+            // Polygon (WMATIC)
+            wethAddress = 0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270;
+        } else if (block.chainid == 80001) {
+            // Mumbai (WMATIC)
+            wethAddress = 0x9c3C9283D3e44854697Cd22D3Faa240Cfb032889;
+        } else if (block.chainid == 10 || block.chainid == 420) {
+            // Optimism and Optimism Goerli
+            wethAddress = 0x4200000000000000000000000000000000000006;
+        } else if (block.chainid == 42161) {
+            // Arbitrum One
+            wethAddress = 0x82aF49447D8a07e3bd95BD0d56f35241523fBab1;
+        } else if (block.chainid == 421613) {
+            // Arbitrum Goerli
+            wethAddress = 0xEe01c0CD76354C383B8c7B4e65EA88D00B06f36f;
+        } else if (block.chainid == 42170) {
+            // Arbitrum Nova
+            wethAddress = 0x722E8BdD2ce80A4422E880164f2079488e115365;
+        } else if (block.chainid == 43114) {
+            // Avalanche C-Chain (WAVAX)
+            wethAddress = 0xB31f66AA3C1e785363F0875A1B74E27b85FD66c7;
+        } else if (block.chainid == 43113) {
+            // Avalanche Fuji (WAVAX)
+            wethAddress = 0x1D308089a2D1Ced3f1Ce36B1FcaF815b07217be3;
+        } else if (block.chainid == 56) {
+            // Binance Smart Chain (WBNB)
+            wethAddress = 0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c;
+        } else if (block.chainid == 97) {
+            // Binance Smart Chain Testnet (WBNB)
+            wethAddress = 0xae13d989daC2f0dEbFf460aC112a837C89BAa7cd;
+        } else if (block.chainid == 100) {
+            // Gnosis (WXDAI)
+            wethAddress = 0xe91D153E0b41518A2Ce8Dd3D7944Fa863463a97d;
+        } else if (block.chainid == 8217) {
+            // Klaytn (WKLAY)
+            wethAddress = 0xfd844c2fcA5e595004b17615f891620d1cB9bBB2;
+        } else if (block.chainid == 1001) {
+            // Baobab (WKLAY)
+            wethAddress = 0x9330dd6713c8328a8D82b14e3f60a0f0b4cc7Bfb;
+        } else if (block.chainid == 1284) {
+            // Moonbeam (WGLMR)
+            wethAddress = 0xAcc15dC74880C9944775448304B263D191c6077F;
+        } else if (block.chainid == 1285) {
+            // Moonriver (WMOVR)
+            wethAddress = 0x98878B06940aE243284CA214f92Bb71a2b032B8A;
+        } else {
+            // Revert if the chain ID is not supported.
+            revert("Unsupported chain ID");
+        }
+
+        // Set the WETH interface based on WETH address.
+        _WETH = IWETH(wethAddress);
 
         // Set approval for Seaport to transfer the contract offerer's WETH.
         _WETH.approve(seaport, type(uint256).max);
@@ -476,9 +539,9 @@ contract WethConverter is ERC165, ContractOffererInterface {
         // Set the SIP schema id to 11.
         schemas[0].id = 11;
 
-        // Set the schema metadata to an encoding of the two tokens
-        // being converted and their constant exchange rate (1:1)
-        schemas[0].metadata = abi.encode("ETH", "WETH", 10 ** 18);
+        // Set the schema metadata to an encoding of the addresses of
+        // the two tokens being converted and their constant exchange rate (1:1).
+        schemas[0].metadata = abi.encode(address(0), address(_WETH), 10 ** 18);
 
         return ("WethConverter", schemas);
     }
