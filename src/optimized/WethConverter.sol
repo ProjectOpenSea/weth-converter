@@ -9,6 +9,8 @@ import {ItemType} from "seaport-types/lib/ConsiderationEnums.sol";
 
 import {ReceivedItem, Schema, SpentItem} from "seaport-types/lib/ConsiderationStructs.sol";
 
+import {Common_token_offset, ratifyOrder_selector, ReceivedItem_amount_offset, ReceivedItem_CommonParams_size, ReceivedItem_recipient_offset} from "seaport-types/lib/ConsiderationConstants.sol";
+
 import {ERC165} from "../utils/ERC165.sol";
 
 interface IWETH {
@@ -40,25 +42,76 @@ struct Condition {
  *         available for fulfillment.
  */
 contract WethConverter is ERC165, ContractOffererInterface {
+    // The 4-byte error selector of `CallFailed()`
+    uint256 public constant CallFailed_error_selector = 0x3204506f;
+
+    // The 4-byte function selector of `balanceOf(address)`
+    uint256 public constant Weth_BalanceOf_selector = 0x70a08231;
+
+    // The Seaport interface used to interact with Seaport
     SeaportInterface private immutable _SEAPORT;
+
+    // The WETH interface used to approve, wrap/unwrap, and check balances of tokens
     IWETH private immutable _WETH;
 
+    // Mapping of account addresses to ETH deposit amounts.
     mapping(address => uint256) public balanceOf;
 
+    /**
+     * @dev Emit an event whenever an account deposits ETH into the contract.
+     *
+     * @param account The address of the depositor account.
+     * @param amount  The amount being deposited.
+     */
     event Deposit(address indexed account, uint256 amount);
+
+    /**
+     * @dev Emit an event whenever an account withdraws ETH from the contract.
+     *
+     * @param account The address of the withdrawing account.
+     * @param amount  The amount being withdrawn.
+     */
     event Withdrawal(address indexed account, uint256 amount);
 
+    /**
+     * @dev Revert with an error when a function is called by an invalid caller.
+     *
+     * @param caller The caller of the function.
+     */
     error InvalidCaller(address caller);
+
+    /**
+     * @dev Revert with an error if the total number of maximumSpentItems supplied
+     *      is not 1.
+     *
+     * @param items The invalid number of maximumSpentItems supplied.
+     */
     error InvalidTotalMaximumSpentItems(uint256 items);
+
+    /**
+     * @dev Revert with an error if the supplied maximumSpentItem is not WETH.
+     *
+     * @param item The invalid maximumSpentItem.
+     */
     error InvalidMaximumSpentItem(SpentItem item);
-    error InsufficientMaximumSpentAmount();
-    error InvalidItems();
-    error InvalidTotalMinimumReceivedItems();
-    error UnsupportedExtraDataVersion(uint8 version);
-    error InvalidExtraDataEncoding(uint8 version);
+
+    /**
+     * @dev Revert with an error if the native token transfer to Seaport fails.
+     *
+     * @param target The target address.
+     * @param amount The amount of native tokens to transfer.
+     */
     error NativeTokenTransferFailure(address target, uint256 amount);
-    error CallFailed(); // 0x3204506f
-    error NotImplemented();
+
+    /**
+     * @dev Revert with an error if a low-level call fails.
+     */
+    error CallFailed();
+
+    /**
+     * @dev Revert with an error if Conditions are invalid, or amount to offer
+     *      gets scaled down to 0.
+     */
     error InvalidConditions();
 
     constructor(address seaport, address weth) {
@@ -97,8 +150,7 @@ contract WethConverter is ERC165, ContractOffererInterface {
         // Get the Seaport address from the Seaport interface
         address seaport = address(_SEAPORT);
 
-        // Create the WETH Converter contract order and get the
-        // offer and consideration from the created order
+        // Build the order without changing state.
         (offer, consideration) = _createOrder(
             msg.sender,
             minimumReceived,
@@ -200,19 +252,28 @@ contract WethConverter is ERC165, ContractOffererInterface {
                 gt(considerationItemType, 1),
                 and(
                     considerationItemType,
-                    iszero(eq(calldataload(add(maximumSpentItem, 0x20)), weth))
+                    iszero(
+                        eq(
+                            calldataload(
+                                add(maximumSpentItem, Common_token_offset)
+                            ),
+                            weth
+                        )
+                    )
                 )
             )
 
-            // TODO: write better comment
-            // Update the error buffer.
-            errorBuffer := or(errorBuffer, shl(3, invalidMaximumSpentItem))
+            // Update the error buffer if maximumSpentItem is invalid.
+            errorBuffer := or(errorBuffer, shl(2, invalidMaximumSpentItem))
         }
 
         assembly {
             // Get the consideration amount from the fourth word of
             // maximumSpentItem.
-            amount := calldataload(add(maximumSpentItem, 0x60))
+            // Note: offset for amount is the same for SpentItem and ReceivedItem.
+            amount := calldataload(
+                add(maximumSpentItem, ReceivedItem_amount_offset)
+            )
         }
 
         // If items are no longer available, scale down the amount to offer.
@@ -235,7 +296,7 @@ contract WethConverter is ERC165, ContractOffererInterface {
             // If WETH is supplied for maximumSpent, offer native tokens.
             if (minimumReceived.length > 0) {
                 // Declare a new SpentItem for the offer.
-                // itemType and token address are by default
+                // Note: itemType and token address are by default
                 // NATIVE and address(0), respectively.
                 offer = new SpentItem[](1);
 
@@ -246,16 +307,22 @@ contract WethConverter is ERC165, ContractOffererInterface {
 
         // Check the error buffer to see if any errors were encountered.
         if (errorBuffer != 0) {
+            // Check the last bit of the error buffer.
             if (errorBuffer << 255 != 0) {
                 revert InvalidCaller(msg.sender);
+                // Check the second to last bit of the error buffer.
             } else if (errorBuffer << 254 != 0) {
                 revert InvalidTotalMaximumSpentItems(maximumSpent.length);
-            } else if (errorBuffer << 252 != 0) {
+                // Check the third to last bit of the error buffer.
+            } else if (errorBuffer << 253 != 0) {
                 revert InvalidMaximumSpentItem(maximumSpent[0]);
             }
         }
 
+        // Declare a new ReceivedItem for the consideration.
         consideration = new ReceivedItem[](1);
+
+        // Copy the maximumSpentItem to a minimumReceivedItem and set as consideration.
         consideration[0] = _copySpentAsReceivedToSelf(maximumSpentItem, amount);
     }
 
@@ -268,11 +335,14 @@ contract WethConverter is ERC165, ContractOffererInterface {
     receive() external payable {}
 
     function deposit() public payable {
-        // Wrap in unchecked block because of ETH token supply.
+        // Increase balance of msg.sender.
+        // Wrap in unchecked block because ETH token supply won't exceed
+        // 2 ** 256.
         unchecked {
             balanceOf[msg.sender] += msg.value;
         }
 
+        // Emit a Deposit event.
         emit Deposit(msg.sender, msg.value);
     }
 
@@ -285,21 +355,29 @@ contract WethConverter is ERC165, ContractOffererInterface {
 
         // Return the native tokens.
         assembly {
+            // Send native tokens to the caller and check status of call.
             if iszero(call(gas(), caller(), amount, 0, 0, 0, 0)) {
+                // Determine if reasonable amount of calldata was returned.
                 if and(
                     iszero(iszero(returndatasize())),
                     lt(returndatasize(), 0xffff)
                 ) {
+                    // Copy the return data to memory.
                     returndatacopy(0, 0, returndatasize())
+
+                    // Revert with the return data.
                     revert(0, returndatasize())
                 }
 
-                // CallFailed()
-                mstore(0, 0x3204506f)
+                // Store the CallFailed error selector in memory.
+                mstore(0, CallFailed_error_selector)
+
+                // Revert with the error selector.
                 revert(0x1c, 0x04)
             }
         }
 
+        // Emit a Withdrawal event.
         emit Withdrawal(msg.sender, amount);
     }
 
@@ -324,13 +402,13 @@ contract WethConverter is ERC165, ContractOffererInterface {
         uint256 /* contractNonce */
     ) external pure override returns (bytes4) {
         assembly {
-            // return RatifyOrder magic value.
-            mstore(0, 0xf4dd92ce)
+            // Store the ratifyOrder function selector in memory.
+            mstore(0, ratifyOrder_selector)
+
+            // Return the selector.
             return(0x1c, 0x04)
         }
     }
-
-    // TODO:write previewOrder test
 
     /**
      * @dev View function to preview an order generated in response to a minimum
@@ -360,6 +438,7 @@ contract WethConverter is ERC165, ContractOffererInterface {
         override
         returns (SpentItem[] memory offer, ReceivedItem[] memory consideration)
     {
+        // Build the order without changing state.
         (offer, consideration) = _createOrder(
             caller,
             minimumReceived,
@@ -383,7 +462,22 @@ contract WethConverter is ERC165, ContractOffererInterface {
             Schema[] memory schemas // map to Seaport Improvement Proposal IDs
         )
     {
-        schemas = new Schema[](0);
+        // Declare an array of Schema to return.
+        schemas = new Schema[](2);
+
+        // Set the first SIP schema id to 7.
+        schemas[0].id = 7;
+
+        // Set the first schema metadata to an empty bytes array.
+        schemas[0].metadata = new bytes(0);
+
+        // Set the second SIP schema id to 11.
+        schemas[1].id = 11;
+
+        // Set the second schema metadata to an encoding of the two tokens
+        // being converted and their constant exchange rate (1:1)
+        schemas[1].metadata = abi.encode("ETH", "WETH", 10 ** 18);
+
         return ("WethConverter", schemas);
     }
 
@@ -392,6 +486,7 @@ contract WethConverter is ERC165, ContractOffererInterface {
     ) public view override(ERC165, ContractOffererInterface) returns (bool) {
         return
             interfaceId == type(ContractOffererInterface).interfaceId ||
+            interfaceId == this.getSeaportMetadata.selector ||
             super.supportsInterface(interfaceId);
     }
 
@@ -405,22 +500,26 @@ contract WethConverter is ERC165, ContractOffererInterface {
         // Retrieve the current wrapped balance.
         uint256 currentWrappedBalance;
 
+        // Get the WETH address from the WETH interface.
         address weth = address(_WETH);
 
         assembly ("memory-safe") {
             // Save the 4-byte balanceOf selector in the first word of memory.
-            mstore(0, 0x70a08231)
+            mstore(0, Weth_BalanceOf_selector)
 
-            // Save the address of this contract at the offset of
-            // the second word of memory.
+            // Save the address of this contract in the second word of memory.
             mstore(0x20, address())
 
-            // Call balanceOf on the WETH contract.
+            // Call balanceOf on the WETH contract and check if call was successful.
             if iszero(staticcall(gas(), weth, 0x1c, 0x24, 0, 0x20)) {
-                // CallFailed()
-                mstore(0, 0x3204506f)
+                // Store the CallFailed error selector in memory.
+                mstore(0, CallFailed_error_selector)
+
+                // Revert with the error selector.
                 revert(0x1c, 0x04)
             }
+
+            // Load the returned balance into memory.
             currentWrappedBalance := mload(0)
         }
 
@@ -449,15 +548,14 @@ contract WethConverter is ERC165, ContractOffererInterface {
                 amountToWrap = currentNativeBalance;
             }
 
-            // Perform the wrap.
             assembly {
+                // Perform the wrap and check if call was successful.
                 if iszero(call(gas(), weth, amountToWrap, 0, 0, 0, 0)) {
-                    // Save the 4-byte CallFailed() selector to first word
-                    // of memory.
-                    mstore(0, 0x3204506f)
+                    // If call failed, save the 4-byte CallFailed selector
+                    // in memory.
+                    mstore(0, CallFailed_error_selector)
 
-                    // Revert with the 4-byte CallFailed() selector at offset
-                    // 0x1c (28).
+                    // Revert with the error selector.
                     revert(0x1c, 0x04)
                 }
             }
@@ -483,19 +581,24 @@ contract WethConverter is ERC165, ContractOffererInterface {
             address weth = address(_WETH);
 
             assembly ("memory-safe") {
-                // Save the 4-byte balanceOf selector to first word of memory.
-                mstore(0, 0x70a08231)
+                // Save the 4-byte balanceOf selector in the first word of memory.
+                mstore(0, Weth_BalanceOf_selector)
 
-                // Save the address of this contract to second word of memory.
+                // Save the address of this contract in the second word of memory.
                 mstore(0x20, address())
 
-                // Call balanceOf on the WETH contract.
+                // Call balanceOf on the WETH contract and check if call
+                // was successful.
                 if iszero(staticcall(gas(), weth, 0x1c, 0x24, 0, 0x20)) {
-                    // Save the 4-byte CallFailed() selector to first word
-                    // of memory.
-                    mstore(0, 0x3204506f)
+                    // If call failed, save the 4-byte CallFailed selector
+                    // in memory.
+                    mstore(0, CallFailed_error_selector)
+
+                    // Revert with the error selector.
                     revert(0x1c, 0x04)
                 }
+
+                // Load the returned value for the balanceOf call from memory.
                 currentWrappedBalance := mload(0)
             }
 
@@ -642,9 +745,19 @@ contract WethConverter is ERC165, ContractOffererInterface {
         uint256 amount
     ) internal view returns (ReceivedItem memory receivedItem) {
         assembly {
-            calldatacopy(receivedItem, spentItem, 0x60)
-            mstore(add(receivedItem, 0x60), amount)
-            mstore(add(receivedItem, 0x80), address())
+            // Copy the common params from spentItem
+            // (itemType, token address, and identifier) to the receivedItem.
+            calldatacopy(
+                receivedItem,
+                spentItem,
+                ReceivedItem_CommonParams_size
+            )
+
+            // Store the supplied amount as the amount on the receivedItem.
+            mstore(add(receivedItem, ReceivedItem_amount_offset), amount)
+
+            // Set the weth converter as the recipient.
+            mstore(add(receivedItem, ReceivedItem_recipient_offset), address())
         }
     }
 }
