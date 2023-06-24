@@ -1,17 +1,31 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.13;
 
-import {ContractOffererInterface} from "seaport-types/interfaces/ContractOffererInterface.sol";
+import {
+    ContractOffererInterface
+} from "seaport-types/interfaces/ContractOffererInterface.sol";
 
-import {SeaportInterface} from "seaport-types/interfaces/SeaportInterface.sol";
+import {
+    SeaportInterface
+} from "seaport-types/interfaces/SeaportInterface.sol";
 
-import {ItemType} from "seaport-types/lib/ConsiderationEnums.sol";
+import { ItemType } from "seaport-types/lib/ConsiderationEnums.sol";
 
-import {ReceivedItem, Schema, SpentItem} from "seaport-types/lib/ConsiderationStructs.sol";
+import {
+    ReceivedItem,
+    Schema,
+    SpentItem
+} from "seaport-types/lib/ConsiderationStructs.sol";
 
-import {Common_token_offset, ratifyOrder_selector, ReceivedItem_amount_offset, ReceivedItem_CommonParams_size, ReceivedItem_recipient_offset} from "seaport-types/lib/ConsiderationConstants.sol";
+import {
+    Common_token_offset,
+    ratifyOrder_selector,
+    ReceivedItem_amount_offset,
+    ReceivedItem_CommonParams_size,
+    ReceivedItem_recipient_offset
+} from "seaport-types/lib/ConsiderationConstants.sol";
 
-import {ERC165} from "../utils/ERC165.sol";
+import { ERC165 } from "../utils/ERC165.sol";
 
 interface IWETH {
     function withdraw(uint256) external;
@@ -101,6 +115,13 @@ contract WethConverter is ERC165, ContractOffererInterface {
     error InvalidMaximumSpentItem(SpentItem item);
 
     /**
+     * @dev Revert with an error if the chainId is not supported.
+     *
+     * @param chainId The invalid chainId.
+     */
+    error UnsupportedChainId(uint256 chainId);
+
+    /**
      * @dev Revert with an error if the native token transfer to Seaport fails.
      *
      * @param target The target address.
@@ -120,74 +141,74 @@ contract WethConverter is ERC165, ContractOffererInterface {
     error InvalidConditions();
 
     constructor(address seaport) {
-        // Declare a variable for the chain-dependent WETH address.
-        address wethAddress;
+        // Declare a variable for the chain-dependent wrapped token address.
+        address wrappedTokenAddress;
 
         // Set the Seaport interface with the supplied Seaport constructor argument.
         _SEAPORT = SeaportInterface(seaport);
 
-        // Set the WETH address based on chain id.
+        // Set the wrapped token address based on chain id.
         if (block.chainid == 1) {
             // Mainnet
-            wethAddress = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
+            wrappedTokenAddress = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
         } else if (block.chainid == 5) {
             // Goerli
-            wethAddress = 0xB4FBF271143F4FBf7B91A5ded31805e42b2208d6;
+            wrappedTokenAddress = 0xB4FBF271143F4FBf7B91A5ded31805e42b2208d6;
         } else if (block.chainid == 11155111) {
             // Sepolia
-            wethAddress = 0x7b79995e5f793A07Bc00c21412e50Ecae098E7f9;
+            wrappedTokenAddress = 0x7b79995e5f793A07Bc00c21412e50Ecae098E7f9;
         } else if (block.chainid == 137) {
             // Polygon (WMATIC)
-            wethAddress = 0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270;
+            wrappedTokenAddress = 0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270;
         } else if (block.chainid == 80001) {
             // Mumbai (WMATIC)
-            wethAddress = 0x9c3C9283D3e44854697Cd22D3Faa240Cfb032889;
+            wrappedTokenAddress = 0x9c3C9283D3e44854697Cd22D3Faa240Cfb032889;
         } else if (block.chainid == 10 || block.chainid == 420) {
             // Optimism and Optimism Goerli
-            wethAddress = 0x4200000000000000000000000000000000000006;
+            wrappedTokenAddress = 0x4200000000000000000000000000000000000006;
         } else if (block.chainid == 42161) {
             // Arbitrum One
-            wethAddress = 0x82aF49447D8a07e3bd95BD0d56f35241523fBab1;
+            wrappedTokenAddress = 0x82aF49447D8a07e3bd95BD0d56f35241523fBab1;
         } else if (block.chainid == 421613) {
             // Arbitrum Goerli
-            wethAddress = 0xEe01c0CD76354C383B8c7B4e65EA88D00B06f36f;
+            wrappedTokenAddress = 0xEe01c0CD76354C383B8c7B4e65EA88D00B06f36f;
         } else if (block.chainid == 42170) {
             // Arbitrum Nova
-            wethAddress = 0x722E8BdD2ce80A4422E880164f2079488e115365;
+            wrappedTokenAddress = 0x722E8BdD2ce80A4422E880164f2079488e115365;
         } else if (block.chainid == 43114) {
             // Avalanche C-Chain (WAVAX)
-            wethAddress = 0xB31f66AA3C1e785363F0875A1B74E27b85FD66c7;
+            wrappedTokenAddress = 0xB31f66AA3C1e785363F0875A1B74E27b85FD66c7;
         } else if (block.chainid == 43113) {
             // Avalanche Fuji (WAVAX)
-            wethAddress = 0x1D308089a2D1Ced3f1Ce36B1FcaF815b07217be3;
+            wrappedTokenAddress = 0x1D308089a2D1Ced3f1Ce36B1FcaF815b07217be3;
         } else if (block.chainid == 56) {
             // Binance Smart Chain (WBNB)
-            wethAddress = 0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c;
+            wrappedTokenAddress = 0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c;
         } else if (block.chainid == 97) {
             // Binance Smart Chain Testnet (WBNB)
-            wethAddress = 0xae13d989daC2f0dEbFf460aC112a837C89BAa7cd;
+            wrappedTokenAddress = 0xae13d989daC2f0dEbFf460aC112a837C89BAa7cd;
         } else if (block.chainid == 100) {
             // Gnosis (WXDAI)
-            wethAddress = 0xe91D153E0b41518A2Ce8Dd3D7944Fa863463a97d;
+            wrappedTokenAddress = 0xe91D153E0b41518A2Ce8Dd3D7944Fa863463a97d;
         } else if (block.chainid == 8217) {
             // Klaytn (WKLAY)
-            wethAddress = 0xfd844c2fcA5e595004b17615f891620d1cB9bBB2;
+            wrappedTokenAddress = 0xfd844c2fcA5e595004b17615f891620d1cB9bBB2;
         } else if (block.chainid == 1001) {
             // Baobab (WKLAY)
-            wethAddress = 0x9330dd6713c8328a8D82b14e3f60a0f0b4cc7Bfb;
+            wrappedTokenAddress = 0x9330dd6713c8328a8D82b14e3f60a0f0b4cc7Bfb;
         } else if (block.chainid == 1284) {
             // Moonbeam (WGLMR)
-            wethAddress = 0xAcc15dC74880C9944775448304B263D191c6077F;
+            wrappedTokenAddress = 0xAcc15dC74880C9944775448304B263D191c6077F;
         } else if (block.chainid == 1285) {
             // Moonriver (WMOVR)
-            wethAddress = 0x98878B06940aE243284CA214f92Bb71a2b032B8A;
+            wrappedTokenAddress = 0x98878B06940aE243284CA214f92Bb71a2b032B8A;
         } else {
             // Revert if the chain ID is not supported.
-            revert("Unsupported chain ID");
+            revert UnsupportedChainId(block.chainid);
         }
 
         // Set the WETH interface based on WETH address.
-        _WETH = IWETH(wethAddress);
+        _WETH = IWETH(wrappedTokenAddress);
 
         // Set approval for Seaport to transfer the contract offerer's WETH.
         _WETH.approve(seaport, type(uint256).max);
@@ -222,7 +243,7 @@ contract WethConverter is ERC165, ContractOffererInterface {
         address seaport = address(_SEAPORT);
 
         // Build the order without changing state.
-        (offer, consideration) = _createOrder(
+        (offer, consideration) = _buildOrder(
             msg.sender,
             minimumReceived,
             maximumSpent,
@@ -243,7 +264,7 @@ contract WethConverter is ERC165, ContractOffererInterface {
             // Unwrap WETH if necessary to offer an equivalent amount of native tokens.
             _unwrapIfNecessary(amount);
 
-            // Declare a boolean to check if the native token transfer fails.
+            // Declare a boolean that indicates if the native token transfer fails.
             bool nativeTokenTransferFailed;
 
             // If the consideration itemType is WETH, converter needs to transfer
@@ -263,8 +284,10 @@ contract WethConverter is ERC165, ContractOffererInterface {
     }
 
     /**
-     * @dev Internal view function to create an order with the specified minimum
-     *      and maximum spent items, and optional context (supplied as extraData).
+     * @dev Internal view function to build an order with the specified minimum
+     *      and maximum spent items. If conditional listings (supplied as extraData)
+     *      are given as context, the amount offered by the converter will be
+     *      scaled down if any of the listings are unavailable.
      *
      * @param callingAccount   The address of the account that called the function.
      * @param minimumReceived  The minimum items that the caller must receive.
@@ -274,7 +297,7 @@ contract WethConverter is ERC165, ContractOffererInterface {
      * @return offer         A tuple containing the offer items.
      * @return consideration An array containing the consideration items.
      */
-    function _createOrder(
+    function _buildOrder(
         address callingAccount,
         SpentItem[] calldata minimumReceived,
         SpentItem[] calldata maximumSpent,
@@ -341,7 +364,7 @@ contract WethConverter is ERC165, ContractOffererInterface {
         assembly {
             // Get the consideration amount from the fourth word of
             // maximumSpentItem.
-            // Note: offset for amount is the same for SpentItem and ReceivedItem.
+            // Note: amount offset is the same for SpentItem and ReceivedItem.
             amount := calldataload(
                 add(maximumSpentItem, ReceivedItem_amount_offset)
             )
@@ -365,6 +388,7 @@ contract WethConverter is ERC165, ContractOffererInterface {
             offer[0].amount = amount;
         } else {
             // If WETH is supplied for maximumSpent, offer native tokens.
+            // Only supply minimumReceived if a minimumReceived item was provided.
             if (minimumReceived.length > 0) {
                 // Declare a new SpentItem for the offer.
                 // Note: itemType and token address are by default
@@ -393,7 +417,7 @@ contract WethConverter is ERC165, ContractOffererInterface {
         // Declare a new ReceivedItem for the consideration.
         consideration = new ReceivedItem[](1);
 
-        // Copy the maximumSpentItem to a minimumReceivedItem and set as consideration.
+        // Copy the maximumSpentItem to a ReceivedItem and set as consideration.
         consideration[0] = _copySpentAsReceivedToSelf(maximumSpentItem, amount);
     }
 
@@ -405,6 +429,9 @@ contract WethConverter is ERC165, ContractOffererInterface {
      */
     receive() external payable {}
 
+    /**
+     * @dev Deposit native tokens to the WETH converter.
+     */
     function deposit() public payable {
         // Increase balance of msg.sender.
         // Wrap in unchecked block because ETH token supply won't exceed
@@ -417,6 +444,9 @@ contract WethConverter is ERC165, ContractOffererInterface {
         emit Deposit(msg.sender, msg.value);
     }
 
+    /**
+     * @dev Withdraw native tokens from the WETH converter.
+     */
     function withdraw(uint256 amount) public {
         // Use checked arithmetic so underflows will revert.
         balanceOf[msg.sender] -= amount;
@@ -486,13 +516,13 @@ contract WethConverter is ERC165, ContractOffererInterface {
      *      set of received items, maximum set of spent items, and context
      *      (supplied as extraData).
      *
-     * @custom:param caller      The address of the caller (e.g. Seaport).
-     * @custom:paramfulfiller    The address of the fulfiller (e.g. the account
-     *                           calling Seaport).
-     * @custom:param minReceived The minimum items that the caller is willing to
-     *                           receive.
-     * @custom:param maxSpent    The maximum items caller is willing to spend.
-     * @custom:param context     Additional context of the order.
+     * @param caller           The address of the caller (e.g. Seaport).
+     * @custom:param fulfiller The address of the fulfiller (e.g. the account
+     *                         calling Seaport).
+     * @param minimumReceived  The minimum items that the caller is willing to
+     *                         receive.
+     * @param maximumSpent     The maximum items caller is willing to spend.
+     * @param context          Additional context of the order.
      *
      * @return offer         A tuple containing the offer items.
      * @return consideration A tuple containing the consideration items.
@@ -510,7 +540,7 @@ contract WethConverter is ERC165, ContractOffererInterface {
         returns (SpentItem[] memory offer, ReceivedItem[] memory consideration)
     {
         // Build the order without changing state.
-        (offer, consideration) = _createOrder(
+        (offer, consideration) = _buildOrder(
             caller,
             minimumReceived,
             maximumSpent,
@@ -526,7 +556,7 @@ contract WethConverter is ERC165, ContractOffererInterface {
      */
     function getSeaportMetadata()
         external
-        pure
+        view
         override
         returns (
             string memory name,
