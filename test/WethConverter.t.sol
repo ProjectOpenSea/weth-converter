@@ -1,23 +1,53 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.17;
 
-import {WETH} from "solady/src/tokens/WETH.sol";
+import { WETH } from "solady/src/tokens/WETH.sol";
 
-import {StdCheats} from "forge-std/StdCheats.sol";
+import { StdCheats } from "forge-std/StdCheats.sol";
 
-import {AdvancedOrderLib, ConsiderationItemLib, FulfillmentComponentLib, FulfillmentLib, OfferItemLib, OrderComponentsLib, OrderLib, OrderParametersLib, SeaportArrays, ZoneParametersLib} from "seaport-sol/SeaportSol.sol";
+import {
+    AdvancedOrderLib,
+    ConsiderationItemLib,
+    FulfillmentComponentLib,
+    FulfillmentLib,
+    OfferItemLib,
+    OrderComponentsLib,
+    OrderLib,
+    OrderParametersLib,
+    SeaportArrays,
+    ZoneParametersLib
+} from "seaport-sol/SeaportSol.sol";
 
-import {AdvancedOrder, ConsiderationItem, CriteriaResolver, Fulfillment, FulfillmentComponent, OfferItem, Order, OrderComponents, OrderParameters, ReceivedItem, Schema, SpentItem} from "seaport-types/lib/ConsiderationStructs.sol";
+import {
+    AdvancedOrder,
+    ConsiderationItem,
+    CriteriaResolver,
+    Fulfillment,
+    FulfillmentComponent,
+    OfferItem,
+    Order,
+    OrderComponents,
+    OrderParameters,
+    ReceivedItem,
+    Schema,
+    SpentItem
+} from "seaport-types/lib/ConsiderationStructs.sol";
 
-import {ItemType, OrderType} from "seaport-types/lib/ConsiderationEnums.sol";
+import { ItemType, OrderType } from "seaport-types/lib/ConsiderationEnums.sol";
 
-import {ContractOffererInterface} from "seaport-types/interfaces/ContractOffererInterface.sol";
+import {
+    ContractOffererInterface
+} from "seaport-types/interfaces/ContractOffererInterface.sol";
 
-import {WethConverter} from "../src/optimized/WethConverter.sol";
+import { WethConverter } from "../src/optimized/WethConverter.sol";
 
-import {BaseOrderTest} from "./utils/BaseOrderTest.sol";
+import { BaseOrderTest } from "./utils/BaseOrderTest.sol";
 
-import {ReceivedItem, Schema, SpentItem} from "seaport-types/lib/ConsiderationStructs.sol";
+import {
+    ReceivedItem,
+    Schema,
+    SpentItem
+} from "seaport-types/lib/ConsiderationStructs.sol";
 
 interface IWETH {
     function deposit() external payable;
@@ -54,10 +84,9 @@ contract WethConverterTest is BaseOrderTest {
     using OrderParametersLib for OrderParameters;
     using ZoneParametersLib for AdvancedOrder[];
 
-    address immutable WETH_CONTRACT_ADDRESS =
-        0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
+    address immutable wethAddress = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
 
-    WETH weth;
+    IWETH weth;
     WethConverter wethConverter;
     Context context;
 
@@ -67,27 +96,31 @@ contract WethConverterTest is BaseOrderTest {
 
     function setUp() public override {
         super.setUp();
+        vm.chainId(1);
 
-        weth = new WETH();
-        wethConverter = new WethConverter(address(seaport), address(weth));
+        bytes memory wethCode = address(new WETH()).code;
+        vm.etch(wethAddress, wethCode);
+        weth = IWETH(wethAddress);
+
+        wethConverter = new WethConverter(address(seaport));
 
         // Fund weth converter with eth
         vm.deal(address(wethConverter), 1000 ether);
 
         // Deposit half of eth balance to weth contract
         vm.prank(address(wethConverter));
-        IWETH(address(weth)).deposit{value: 500 ether}();
+        weth.deposit{ value: 500 ether }();
 
         // Accounts approve seaport to transfer weth
-        StdCheats.deal(address(weth), dillon.addr, 1000 ether);
+        StdCheats.deal(wethAddress, dillon.addr, 1000 ether);
         vm.prank(dillon.addr);
         weth.approve(address(seaport), type(uint256).max);
 
-        StdCheats.deal(address(weth), eve.addr, 1000 ether);
+        StdCheats.deal(wethAddress, eve.addr, 1000 ether);
         vm.prank(eve.addr);
         weth.approve(address(seaport), type(uint256).max);
 
-        StdCheats.deal(address(weth), frank.addr, 1000 ether);
+        StdCheats.deal(wethAddress, frank.addr, 1000 ether);
         vm.prank(frank.addr);
         weth.approve(address(seaport), type(uint256).max);
 
@@ -96,7 +129,7 @@ contract WethConverterTest is BaseOrderTest {
         offer[0] = OfferItemLib
             .empty()
             .withItemType(ItemType.ERC20)
-            .withToken(address(weth))
+            .withToken(wethAddress)
             .withAmount(10);
         ConsiderationItem[] memory consideration = new ConsiderationItem[](1);
         consideration[0] = ConsiderationItemLib
@@ -122,7 +155,7 @@ contract WethConverterTest is BaseOrderTest {
         consideration[0] = ConsiderationItemLib
             .empty()
             .withItemType(ItemType.ERC20)
-            .withToken(address(weth))
+            .withToken(wethAddress)
             .withAmount(10);
         parameters = OrderComponentsLib
             .fromDefault(STANDARD)
@@ -138,7 +171,7 @@ contract WethConverterTest is BaseOrderTest {
         offer[0] = OfferItemLib
             .empty()
             .withItemType(ItemType.ERC20)
-            .withToken(address(weth))
+            .withToken(wethAddress)
             .withAmount(10);
         consideration[0] = ConsiderationItemLib
             .empty()
@@ -171,8 +204,8 @@ contract WethConverterTest is BaseOrderTest {
 
         // CONVERSION
         vm.deal(address(wethConverter), 4 ether);
-        StdCheats.deal(address(weth), address(this), 4 ether);
-        weth.approve(address(seaport), 4 ether);
+        StdCheats.deal(wethAddress, address(this), 4 ether);
+        IWETH(wethAddress).approve(address(seaport), 4 ether);
 
         order = AdvancedOrderLib.empty().withNumerator(1).withDenominator(1);
 
@@ -189,7 +222,7 @@ contract WethConverterTest is BaseOrderTest {
             ConsiderationItem memory considerationItem = ConsiderationItemLib
                 .empty();
             considerationItem = considerationItem.withItemType(ItemType.ERC20);
-            considerationItem = considerationItem.withToken(address(weth));
+            considerationItem = considerationItem.withToken(wethAddress);
             considerationItem = considerationItem.withIdentifierOrCriteria(0);
             considerationItem = considerationItem.withStartAmount(3 ether);
             considerationItem = considerationItem.withEndAmount(3 ether);
@@ -223,7 +256,7 @@ contract WethConverterTest is BaseOrderTest {
         {
             OfferItem memory offerItem = OfferItemLib.empty();
             offerItem = offerItem.withItemType(ItemType.ERC20);
-            offerItem = offerItem.withToken(address(weth));
+            offerItem = offerItem.withToken(wethAddress);
             offerItem = offerItem.withIdentifierOrCriteria(0);
             offerItem = offerItem.withStartAmount(3 ether);
             offerItem = offerItem.withEndAmount(3 ether);
@@ -299,7 +332,7 @@ contract WethConverterTest is BaseOrderTest {
         {
             OfferItem memory offerItem = OfferItemLib.empty();
             offerItem = offerItem.withItemType(ItemType.ERC20);
-            offerItem = offerItem.withToken(address(weth));
+            offerItem = offerItem.withToken(wethAddress);
             offerItem = offerItem.withIdentifierOrCriteria(0);
             offerItem = offerItem.withStartAmount(3 ether);
             offerItem = offerItem.withEndAmount(3 ether);
@@ -389,7 +422,7 @@ contract WethConverterTest is BaseOrderTest {
 
         nativeBalanceBefore = address(this).balance;
 
-        seaport.matchAdvancedOrders{value: 3 ether}(
+        seaport.matchAdvancedOrders{ value: 3 ether }(
             orders,
             new CriteriaResolver[](0),
             fulfillments,
@@ -433,7 +466,7 @@ contract WethConverterTest is BaseOrderTest {
         {
             OfferItem memory offerItem = OfferItemLib.empty();
             offerItem = offerItem.withItemType(ItemType.ERC20);
-            offerItem = offerItem.withToken(address(weth));
+            offerItem = offerItem.withToken(wethAddress);
             offerItem = offerItem.withIdentifierOrCriteria(0);
             offerItem = offerItem.withStartAmount(3 ether);
             offerItem = offerItem.withEndAmount(3 ether);
@@ -501,7 +534,7 @@ contract WethConverterTest is BaseOrderTest {
             ConsiderationItem memory considerationItem = ConsiderationItemLib
                 .empty();
             considerationItem = considerationItem.withItemType(ItemType.ERC20);
-            considerationItem = considerationItem.withToken(address(weth));
+            considerationItem = considerationItem.withToken(wethAddress);
             considerationItem = considerationItem.withIdentifierOrCriteria(0);
             considerationItem = considerationItem.withStartAmount(3 ether);
             considerationItem = considerationItem.withEndAmount(3 ether);
@@ -681,7 +714,7 @@ contract WethConverterTest is BaseOrderTest {
         {
             OfferItem memory offerItem = OfferItemLib.empty();
             offerItem = offerItem.withItemType(ItemType.ERC20);
-            offerItem = offerItem.withToken(address(weth));
+            offerItem = offerItem.withToken(wethAddress);
             offerItem = offerItem.withIdentifierOrCriteria(0);
             offerItem = offerItem.withStartAmount(5 ether);
             offerItem = offerItem.withEndAmount(5 ether);
@@ -749,7 +782,7 @@ contract WethConverterTest is BaseOrderTest {
             ConsiderationItem memory considerationItem = ConsiderationItemLib
                 .empty();
             considerationItem = considerationItem.withItemType(ItemType.ERC20);
-            considerationItem = considerationItem.withToken(address(weth));
+            considerationItem = considerationItem.withToken(wethAddress);
             considerationItem = considerationItem.withIdentifierOrCriteria(0);
             considerationItem = considerationItem.withStartAmount(5 ether);
             considerationItem = considerationItem.withEndAmount(5 ether);
@@ -994,7 +1027,7 @@ contract WethConverterTest is BaseOrderTest {
             ConsiderationItem memory considerationItem = ConsiderationItemLib
                 .empty();
             considerationItem = considerationItem.withItemType(ItemType.ERC20);
-            considerationItem = considerationItem.withToken(address(weth));
+            considerationItem = considerationItem.withToken(wethAddress);
             considerationItem = considerationItem.withIdentifierOrCriteria(0);
             considerationItem = considerationItem.withStartAmount(3 ether);
             considerationItem = considerationItem.withEndAmount(3 ether);
@@ -1031,7 +1064,7 @@ contract WethConverterTest is BaseOrderTest {
         {
             OfferItem memory offerItem = OfferItemLib.empty();
             offerItem = offerItem.withItemType(ItemType.ERC20);
-            offerItem = offerItem.withToken(address(weth));
+            offerItem = offerItem.withToken(wethAddress);
             offerItem = offerItem.withIdentifierOrCriteria(0);
             offerItem = offerItem.withStartAmount(1 ether);
             offerItem = offerItem.withEndAmount(1 ether);
@@ -1089,7 +1122,7 @@ contract WethConverterTest is BaseOrderTest {
         {
             OfferItem memory offerItem = OfferItemLib.empty();
             offerItem = offerItem.withItemType(ItemType.ERC20);
-            offerItem = offerItem.withToken(address(weth));
+            offerItem = offerItem.withToken(wethAddress);
             offerItem = offerItem.withIdentifierOrCriteria(0);
             offerItem = offerItem.withStartAmount(2 ether);
             offerItem = offerItem.withEndAmount(2 ether);
@@ -1308,7 +1341,7 @@ contract WethConverterTest is BaseOrderTest {
             ConsiderationItem memory considerationItem = ConsiderationItemLib
                 .empty();
             considerationItem = considerationItem.withItemType(ItemType.ERC20);
-            considerationItem = considerationItem.withToken(address(weth));
+            considerationItem = considerationItem.withToken(wethAddress);
             considerationItem = considerationItem.withIdentifierOrCriteria(0);
             considerationItem = considerationItem.withStartAmount(1.5 ether);
             considerationItem = considerationItem.withEndAmount(1.5 ether);
@@ -1521,7 +1554,7 @@ contract WethConverterTest is BaseOrderTest {
 
         // dillon attempts to fulfill both listings with 1.5 ETH and 1.5 WETH
         vm.prank(dillon.addr);
-        seaport.fulfillAvailableAdvancedOrders{value: 1.5 ether}(
+        seaport.fulfillAvailableAdvancedOrders{ value: 1.5 ether }(
             orders,
             new CriteriaResolver[](0),
             offerFulfillmentComponents,
@@ -1543,29 +1576,35 @@ contract WethConverterTest is BaseOrderTest {
             "eve should have received 2 ETH"
         );
 
-        // assertEq(
-        //     wethConverterWethBalanceBeore -
-        //         weth.balanceOf(address(wethConverter)),
-        //     0.5 ether,
-        //     "weth converter's weth balance should have increased by 1 ether"
-        // );
+        assertEq(
+            weth.balanceOf(eve.addr) - eveWethBalanceBefore,
+            0,
+            "eve should not have received any WETH"
+        );
 
-        // assertEq(
-        //     address(wethConverter).balance - wethConverterNativeBalanceBefore,
-        //     0.5 ether,
-        //     "weth converter's native balance should have decreased by 1 ether"
-        // );
+        assertEq(
+            weth.balanceOf(address(wethConverter)) -
+                wethConverterWethBalanceBeore,
+            0.5 ether,
+            "weth converter's weth balance should have increased by 0.5 WETH"
+        );
+
+        assertEq(
+            wethConverterNativeBalanceBefore - address(wethConverter).balance,
+            0.5 ether,
+            "weth converter's native balance should have decreased by 0.5 ETH"
+        );
 
         assertEq(
             dillonWethBalanceBefore - weth.balanceOf(dillon.addr),
             0.5 ether,
-            "dillon's weth balance should have decreased by 0.5 ether"
+            "dillon's weth balance should have decreased by 0.5 WETH"
         );
 
         assertEq(
             dillonNativeBalanceBefore - dillon.addr.balance,
             1.5 ether,
-            "dillon's native balance should have decreased by 1.5 ether"
+            "dillon's native balance should have decreased by 1.5 ETH"
         );
 
         assertEq(
@@ -1614,7 +1653,7 @@ contract WethConverterTest is BaseOrderTest {
             ConsiderationItem memory considerationItem = ConsiderationItemLib
                 .empty();
             considerationItem = considerationItem.withItemType(ItemType.ERC20);
-            considerationItem = considerationItem.withToken(address(weth));
+            considerationItem = considerationItem.withToken(wethAddress);
             considerationItem = considerationItem.withIdentifierOrCriteria(0);
             considerationItem = considerationItem.withStartAmount(1.5 ether);
             considerationItem = considerationItem.withEndAmount(1.5 ether);
@@ -1826,7 +1865,7 @@ contract WethConverterTest is BaseOrderTest {
 
         // dillon attempts to fulfill both listings with 1.5 ETH and 1.5 WETH
         vm.prank(dillon.addr);
-        seaport.fulfillAvailableAdvancedOrders{value: 1.5 ether}(
+        seaport.fulfillAvailableAdvancedOrders{ value: 1.5 ether }(
             orders,
             new CriteriaResolver[](0),
             offerFulfillmentComponents,
@@ -1846,6 +1885,12 @@ contract WethConverterTest is BaseOrderTest {
             eve.addr.balance - eveNativeBalanceBefore,
             1 ether,
             "eve should have received 1 ETH"
+        );
+
+        assertEq(
+            weth.balanceOf(eve.addr) - eveWethBalanceBefore,
+            0,
+            "eve should not have received any WETH"
         );
 
         assertEq(
@@ -1907,7 +1952,7 @@ contract WethConverterTest is BaseOrderTest {
         {
             OfferItem memory offerItem = OfferItemLib.empty();
             offerItem = offerItem.withItemType(ItemType.ERC20);
-            offerItem = offerItem.withToken(address(weth));
+            offerItem = offerItem.withToken(wethAddress);
             offerItem = offerItem.withIdentifierOrCriteria(0);
             offerItem = offerItem.withStartAmount(600 ether);
             offerItem = offerItem.withEndAmount(600 ether);
@@ -1975,7 +2020,7 @@ contract WethConverterTest is BaseOrderTest {
             ConsiderationItem memory considerationItem = ConsiderationItemLib
                 .empty();
             considerationItem = considerationItem.withItemType(ItemType.ERC20);
-            considerationItem = considerationItem.withToken(address(weth));
+            considerationItem = considerationItem.withToken(wethAddress);
             considerationItem = considerationItem.withIdentifierOrCriteria(0);
             considerationItem = considerationItem.withStartAmount(600 ether);
             considerationItem = considerationItem.withEndAmount(600 ether);
@@ -2168,7 +2213,7 @@ contract WethConverterTest is BaseOrderTest {
 
         // set up test so weth converter has 900 weth and 100 eth
         vm.prank(address(wethConverter));
-        weth.deposit{value: 400 ether}();
+        weth.deposit{ value: 400 ether }();
 
         assertEq(
             address(wethConverter).balance,
@@ -2197,7 +2242,7 @@ contract WethConverterTest is BaseOrderTest {
         {
             OfferItem memory offerItem = OfferItemLib.empty();
             offerItem = offerItem.withItemType(ItemType.ERC20);
-            offerItem = offerItem.withToken(address(weth));
+            offerItem = offerItem.withToken(wethAddress);
             offerItem = offerItem.withIdentifierOrCriteria(0);
             offerItem = offerItem.withStartAmount(200 ether);
             offerItem = offerItem.withEndAmount(200 ether);
@@ -2265,7 +2310,7 @@ contract WethConverterTest is BaseOrderTest {
             ConsiderationItem memory considerationItem = ConsiderationItemLib
                 .empty();
             considerationItem = considerationItem.withItemType(ItemType.ERC20);
-            considerationItem = considerationItem.withToken(address(weth));
+            considerationItem = considerationItem.withToken(wethAddress);
             considerationItem = considerationItem.withIdentifierOrCriteria(0);
             considerationItem = considerationItem.withStartAmount(200 ether);
             considerationItem = considerationItem.withEndAmount(200 ether);
