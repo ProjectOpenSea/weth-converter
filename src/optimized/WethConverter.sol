@@ -47,13 +47,12 @@ struct Condition {
 /**
  * @title WethConverter
  * @author 0age, emo.eth, stephanm.eth
- * @notice WethConverter is a proof of concept for an ETH <> WETH conversion
- *         contract offerer. It will offer ETH and require an equivalent amount
- *         of WETH back, or will offer WETH and require an equivalent amount of
- *         ETH back, wrapping and unwrapping its internal balance as required to
- *         provide the requested amount. It also enables conditionally reducing
- *         the offered amount based on whether conditional listings are still
- *         available for fulfillment.
+ * @notice WethConverter is a basic Seaport app for performing ETH <> WETH conversion.
+ *         It will offer ETH and require an equivalent amount of WETH back,
+ *         or will offer WETH and require an equivalent amount of ETH back,
+ *         wrapping and unwrapping its internal balance as required to provide the requested amount.
+ *         It also enables conditionally reducing the offered amount based on whether
+ *         conditional listings are still available for fulfillment.
  */
 contract WethConverter is ERC165, ContractOffererInterface {
     // The 4-byte error selector of `CallFailed()`
